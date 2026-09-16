@@ -1,0 +1,6 @@
+{
+  "name": "Recallly - AI Bookmark Knowledge Base",
+  "description": "Turn your saved X bookmarks into an organized, searchable, and conversational personal intelligence library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

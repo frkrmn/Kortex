@@ -58,7 +58,7 @@ export const api = {
     redirectUri: string;
     instructions?: string;
   }> {
-    const res = await apiFetch(`/api/integrations/x/auth-url?userId=${encodeURIComponent(userId)}`);
+    const res = await apiFetch('/api/integrations/x/auth-url');
     if (!res.ok) throw new Error('Failed to fetch X authorization URL');
     return res.json();
   },

@@ -83,6 +83,7 @@ export const SettingsView: React.FC = () => {
   // Listen for OAuth messages from popup
   useEffect(() => {
     const handleOAuthMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'X_AUTH_SUCCESS') {
         setIsConnecting(false);
         showToast(`Connected as @${event.data.data.username}`);

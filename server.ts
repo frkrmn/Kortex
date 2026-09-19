@@ -8,6 +8,7 @@ import { store } from './server/store';
 import { xSyncEngine } from './server/sources/x-sync-engine';
 import { enrichmentPipeline } from './server/ai/enrichment-pipeline';
 import { liveApi } from './server/live-api';
+import { finishLiveXOAuth } from './server/sources/x-live';
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -33,12 +34,20 @@ async function startServer() {
   const destructiveLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 3, message: { error: 'Rate limit exceeded for this operation.' } });
 
   app.use('/api/', apiLimiter);
+  app.use('/api/integrations/x/auth-url', authLimiter);
 
   // The file-backed API has a single shared identity. Keep it available only
   // for local development until its handlers use authenticated tenant storage.
   app.use('/api/', (req, res, next) => {
     if (req.path === '/health') return next();
     if (process.env.NODE_ENV === 'production') {
+      if (req.path.replace(/\/$/, '') === '/integrations/x/callback') {
+        void finishLiveXOAuth(req, res).catch(error => {
+          console.error('X callback failure:', error);
+          if (!res.headersSent) res.status(500).send('X connection failed.');
+        });
+        return;
+      }
       void liveApi(req, res).catch(error => {
         console.error('Live API failure:', error);
         if (!res.headersSent) res.status(500).json({ error: 'Request failed.' });

@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { mapSavedItemRowToBookmark, mapCollectionRowToCollection, mapProfileRowToProfile, mapConnectedAccountSafeToAccount, mapDigestRowToDigest, mapDigestSettingsRowToSettings, mapTopicRowToTopic } from '../src/lib/repositories/supabase/mappers';
 import { PLANS } from '../src/config/plans';
+import { beginLiveXOAuth, disconnectLiveX, syncLiveX, isLiveXConfigured } from './sources/x-live';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -32,6 +33,18 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
   const route = req.path.replace(/\/$/, '');
   const method = req.method;
   try {
+    if (route === '/integrations/x/auth-url' && method === 'GET') {
+      await beginLiveXOAuth(req, res, user.id);
+      return;
+    }
+    if ((route === '/integrations/x/disconnect' || route === '/sources/x/disconnect') && method === 'POST') {
+      res.json(await disconnectLiveX(user.id));
+      return;
+    }
+    if ((route === '/integrations/x/sync' || route === '/sources/x/sync') && method === 'POST') {
+      res.json(await syncLiveX(user.id));
+      return;
+    }
     if (route === '/user/profile' && method === 'GET') {
       const { data, error } = await db.from('profiles').select('*').eq('user_id', user.id).single();
       if (error) throw error;
@@ -62,7 +75,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         connected: Boolean(account?.connected), username: account?.username || '',
         displayName: account?.displayName || '', avatarUrl: account?.avatarUrl || '',
         last_sync_at: account?.last_sync_at, last_successful_sync: account?.last_successful_sync,
-        sync_status: account?.sync_status || 'idle', configured: Boolean(process.env.X_CLIENT_ID),
+        sync_status: account?.sync_status || 'idle', configured: isLiveXConfigured(),
         redirectUri: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/integrations/x/callback` : null,
       });
       return;

@@ -48,7 +48,7 @@ export const OnboardingView: React.FC = () => {
   // Listen to OAuth popup messages
   useEffect(() => {
     const handleOAuthMessage = async (event: MessageEvent) => {
-      // Security check: only handle messages matching our OAuth contracts
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'X_AUTH_SUCCESS') {
         setIsConnecting(false);
         const userData = event.data.data;

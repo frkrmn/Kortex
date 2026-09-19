@@ -1,0 +1,12 @@
+# Kortex security audit — 2026-09-19
+
+Reviewed source ref `eb6ce363e360f70dce49ba313cffaad8346c67f7` (initially clean worktree). Static review covered the Express routes and shared store, X OAuth and token encryption, billing and background services, Supabase schema and RLS, and browser data access and rendering. No prior audit ledger was found. This is a source review; deployed configuration and database permissions were not inspected.
+
+| Priority | Finding | Evidence | Fix / remaining work |
+| --- | --- | --- | --- |
+| Critical | Shared unauthenticated API permits reading, changing, exporting, and clearing one file backed account. | `server.ts` routes call `store` without auth; `server/store.ts` uses one `data/kortex-store.json`. | Demo routes are now loopback only. Production routes require verified Supabase bearer tokens and use RLS backed queries for the migrated endpoints; remaining routes return 501. Complete migration before closing [GRM-125](https://linear.app/grmstr/issue/GRM-125/replace-shared-legacy-api-with-authenticated-tenant-scoped-storage). |
+| High | Browser clients can select encrypted OAuth token fields from `connected_accounts`. | The owner SELECT RLS policy covers whole rows in `20260915000002_rls_policies.sql`; the safe view does not revoke base table permissions. | New migration restricts browser column grants and sets the view to invoker security. Apply and verify in Supabase. [GRM-126](https://linear.app/grmstr/issue/GRM-126/prevent-browser-access-to-stored-oauth-credential-columns). |
+| High | Dynamic JSON in X OAuth callback HTML can end a script element. | `server.ts` interpolated `JSON.stringify` of callback error text directly in `<script>`. | Escaped `<` in embedded JSON. [GRM-127](https://linear.app/grmstr/issue/GRM-127/escape-dynamic-json-embedded-in-x-oauth-callback-scripts). |
+| Medium | Random fallback encryption salt changes the token key after each restart. | `server/crypto.ts` generated a random salt when none was configured. | A stable `ENCRYPTION_SALT` is now required; configure it in deployment. [GRM-128](https://linear.app/grmstr/issue/GRM-128/require-stable-encryption-salt-for-saved-x-oauth-tokens). |
+
+Verification: `git diff --check` passed. `npm run lint` could not complete because dependencies are absent, and it also reported existing type errors unrelated to these edits. No local server, database, or deployed endpoints were exercised. The SQL migration has not been applied to a database; production protection depends on deployment of the changed server and migration.

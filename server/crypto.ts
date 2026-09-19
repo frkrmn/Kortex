@@ -16,7 +16,10 @@ function getEncryptionKey(): Buffer {
       'Set a strong random ENCRYPTION_KEY before starting the server.'
     );
   }
-  const salt = process.env.ENCRYPTION_SALT || crypto.randomBytes(16).toString('hex');
+  const salt = process.env.ENCRYPTION_SALT;
+  if (!salt || salt.length < 16) {
+    throw new Error('FATAL: ENCRYPTION_SALT must be a stable random value of at least 16 characters.');
+  }
   derivedKey = crypto.scryptSync(rawKey.trim(), salt, 32);
 
   return derivedKey;

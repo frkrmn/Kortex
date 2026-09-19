@@ -7,10 +7,15 @@ import { createServer as createViteServer } from 'vite';
 import { store } from './server/store';
 import { xSyncEngine } from './server/sources/x-sync-engine';
 import { enrichmentPipeline } from './server/ai/enrichment-pipeline';
+import { liveApi } from './server/live-api';
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
 async function startServer() {
@@ -28,6 +33,23 @@ async function startServer() {
   const destructiveLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 3, message: { error: 'Rate limit exceeded for this operation.' } });
 
   app.use('/api/', apiLimiter);
+
+  // The file-backed API has a single shared identity. Keep it available only
+  // for local development until its handlers use authenticated tenant storage.
+  app.use('/api/', (req, res, next) => {
+    if (req.path === '/health') return next();
+    if (process.env.NODE_ENV === 'production') {
+      void liveApi(req, res).catch(error => {
+        console.error('Live API failure:', error);
+        if (!res.headersSent) res.status(500).json({ error: 'Request failed.' });
+      });
+      return;
+    }
+    const localAddress = req.socket.remoteAddress;
+    const isLoopback = localAddress === '127.0.0.1' || localAddress === '::1' || localAddress === '::ffff:127.0.0.1';
+    if (isLoopback) return next();
+    return res.status(403).json({ error: 'This API is available only in local development.' });
+  });
 
   // Health check
   app.get('/api/health', (req, res) => {
@@ -59,7 +81,7 @@ async function startServer() {
           <head><title>Recallly - Connection Error</title></head>
           <body style="font-family: system-ui, sans-serif; padding: 32px; text-align: center; color: #171717;">
             <script>
-              var errorData = ${JSON.stringify({ type: 'X_AUTH_ERROR', error: errorMsg })};
+              var errorData = ${scriptJson({ type: 'X_AUTH_ERROR', error: errorMsg })};
               if (window.opener) {
                 window.opener.postMessage(errorData, ${JSON.stringify(APP_ORIGIN)});
                 window.close();
@@ -96,7 +118,7 @@ async function startServer() {
           <head><title>Recallly - Connection Failed</title></head>
           <body style="font-family: system-ui, sans-serif; padding: 32px; text-align: center; color: #171717;">
             <script>
-              var errorData = ${JSON.stringify({ type: 'X_AUTH_ERROR', error: failMsg })};
+              var errorData = ${scriptJson({ type: 'X_AUTH_ERROR', error: failMsg })};
               if (window.opener) {
                 window.opener.postMessage(errorData, ${JSON.stringify(APP_ORIGIN)});
                 window.close();
@@ -130,7 +152,7 @@ async function startServer() {
         <body style="font-family: system-ui, sans-serif; padding: 32px; text-align: center; color: #171717;">
           <script>
             try {
-              var payload = ${JSON.stringify(successPayload)};
+              var payload = ${scriptJson(successPayload)};
               if (window.opener) {
                 window.opener.postMessage(payload, ${JSON.stringify(APP_ORIGIN)});
                 setTimeout(function() { window.close(); }, 300);
@@ -503,7 +525,7 @@ async function startServer() {
     res.status(500).json({ error: 'Internal server error' });
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1', () => {
     console.log(`Kortex server running at http://localhost:${PORT}`);
   });
 }

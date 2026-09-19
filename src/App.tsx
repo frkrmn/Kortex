@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DemoStoreProvider, useDemoStore } from './lib/store/demo-store';
 import { RouterProvider, useRouter } from './lib/router';
-import { AuthProvider } from './lib/auth/auth-context';
+import { AuthProvider, useAuth } from './lib/auth/auth-context';
 import { AppSidebar } from './components/AppSidebar';
 import { MobileNavigation } from './components/MobileNavigation';
 import { Toast } from './components/Toast';
@@ -30,7 +30,18 @@ import { TermsView, PrivacyView } from './views/LegalViews';
 
 const AppContent: React.FC = () => {
   const { route, navigate } = useRouter();
+  const { isLoading, isAuthenticated, isDemo } = useAuth();
   const { createCollection } = useDemoStore();
+
+  const protectedRoute = !['landing', 'login', 'signup', 'forgot-password', 'reset-password',
+    'auth-callback', 'terms', 'privacy'].includes(route);
+
+  useEffect(() => {
+    if (protectedRoute && !isLoading && !isAuthenticated && !isDemo) {
+      const next = window.location.pathname + window.location.search;
+      navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
+    }
+  }, [protectedRoute, isLoading, isAuthenticated, isDemo, navigate]);
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
@@ -46,6 +57,10 @@ const AppContent: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  if (protectedRoute && !isDemo && (isLoading || !isAuthenticated)) {
+    return <div className="min-h-screen bg-[#FAFAF8]" />;
+  }
 
   // Landing Page Route
   if (route === 'landing') {

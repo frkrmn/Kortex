@@ -59,7 +59,11 @@ export const api = {
     instructions?: string;
   }> {
     const res = await apiFetch('/api/integrations/x/auth-url');
-    if (!res.ok) throw new Error('Failed to fetch X authorization URL');
+    if (res.status === 401) throw new Error('Sign in to Kortex before connecting X.');
+    if (!res.ok) {
+      const details = await res.json().catch(() => null);
+      throw new Error(details?.error || 'Could not start X connection. Please try again.');
+    }
     return res.json();
   },
 

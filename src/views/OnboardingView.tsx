@@ -346,9 +346,9 @@ export const OnboardingView: React.FC = () => {
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-semibold">{connectError}</p>
-                  <p className="text-[11px] text-rose-700 mt-0.5">
-                    Make sure popups are enabled, or click below to retry.
-                  </p>
+                  {connectError.toLowerCase().includes('popup') && (
+                    <p className="text-[11px] text-rose-700 mt-0.5">Allow popups for this site, then retry.</p>
+                  )}
                 </div>
               </div>
             )}

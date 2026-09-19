@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS saved_item_embeddings (
   CONSTRAINT uq_saved_item_embeddings_item_version UNIQUE(saved_item_id, embedding_version)
 );
 
+DROP TRIGGER IF EXISTS trg_saved_item_embeddings_updated_at ON saved_item_embeddings;
 CREATE TRIGGER trg_saved_item_embeddings_updated_at
   BEFORE UPDATE ON saved_item_embeddings
   FOR EACH ROW
@@ -45,33 +46,56 @@ CREATE INDEX IF NOT EXISTS idx_saved_item_embeddings_hnsw
 -- 4. ROW LEVEL SECURITY ON EMBEDDINGS
 ALTER TABLE saved_item_embeddings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own embeddings" ON saved_item_embeddings;
 CREATE POLICY "Users can view their own embeddings"
   ON saved_item_embeddings FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own embeddings" ON saved_item_embeddings;
 CREATE POLICY "Users can insert their own embeddings"
   ON saved_item_embeddings FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own embeddings" ON saved_item_embeddings;
 CREATE POLICY "Users can update their own embeddings"
   ON saved_item_embeddings FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own embeddings" ON saved_item_embeddings;
 CREATE POLICY "Users can delete their own embeddings"
   ON saved_item_embeddings FOR DELETE
   USING (auth.uid() = user_id);
 
 -- 5. MULTILINGUAL FULL-TEXT SEARCH ON SAVED_ITEMS
--- Add generated search tsvector using the 'simple' parser to preserve terms in Turkish, German, Spanish, English, etc.
+-- array_to_string(text[], text) is not immutable, so it cannot be used in a
+-- stored generated column. A trigger retains keyword indexing and weights.
 ALTER TABLE saved_items
-  ADD COLUMN IF NOT EXISTS search_tsv tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('simple', COALESCE(author_name, '')), 'A') ||
-    setweight(to_tsvector('simple', COALESCE(author_username, '')), 'A') ||
-    setweight(to_tsvector('simple', COALESCE(summary, '')), 'B') ||
-    setweight(to_tsvector('simple', COALESCE(content, '')), 'C') ||
-    setweight(to_tsvector('simple', array_to_string(COALESCE(keywords, '{}'::text[]), ' ')), 'B')
-  ) STORED;
+  ADD COLUMN IF NOT EXISTS search_tsv tsvector;
+
+CREATE OR REPLACE FUNCTION public.update_saved_item_search_tsv()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  NEW.search_tsv :=
+    setweight(to_tsvector('simple', COALESCE(NEW.author_name, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(NEW.author_username, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(NEW.summary, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(NEW.content, '')), 'C') ||
+    setweight(to_tsvector('simple', array_to_string(COALESCE(NEW.keywords, '{}'::text[]), ' ')), 'B');
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_saved_items_search_tsv ON saved_items;
+CREATE TRIGGER trg_saved_items_search_tsv
+  BEFORE INSERT OR UPDATE OF author_name, author_username, summary, content, keywords
+  ON saved_items FOR EACH ROW
+  EXECUTE FUNCTION public.update_saved_item_search_tsv();
+
+-- Backfill rows saved before this migration. The content update fires the trigger.
+UPDATE saved_items SET content = content WHERE search_tsv IS NULL;
 
 -- GIN Index for fast full-text queries
 CREATE INDEX IF NOT EXISTS idx_saved_items_search_tsv

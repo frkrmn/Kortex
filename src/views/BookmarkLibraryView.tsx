@@ -8,11 +8,13 @@ import {
   X,
   Bookmark as BookmarkIcon,
   RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { Bookmark } from '../types';
+import { api } from '../lib/api';
 
 export const BookmarkLibraryView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
@@ -38,11 +40,45 @@ export const BookmarkLibraryView: React.FC = () => {
   const urlSearch = searchParams.get('q') || '';
 
   const [searchQuery, setSearchQuery] = useState(urlSearch);
+  const [hybridResults, setHybridResults] = useState<{
+    results: { item: Bookmark; score: number; matchType: 'lexical' | 'semantic' | 'hybrid' }[];
+    total: number;
+    mode: 'hybrid' | 'lexical' | 'semantic';
+    latencyMs: number;
+  } | null>(null);
+  const [isSearchingHybrid, setIsSearchingHybrid] = useState(false);
 
   // Sync search query changes to URL debounce
   useEffect(() => {
     setSearchQuery(urlSearch);
   }, [urlSearch]);
+
+  // Hybrid search execution
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setHybridResults(null);
+      setIsSearchingHybrid(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingHybrid(true);
+      try {
+        const res = await api.searchHybrid(trimmed, {
+          topic: urlTopic !== 'all' ? urlTopic : undefined,
+          filter: urlFilter !== 'all' ? urlFilter : undefined,
+        });
+        setHybridResults(res);
+      } catch (err) {
+        console.warn('Hybrid search failed, falling back to local search:', err);
+      } finally {
+        setIsSearchingHybrid(false);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, urlTopic, urlFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,11 +98,24 @@ export const BookmarkLibraryView: React.FC = () => {
     navigate(`/bookmarks${qs ? `?${qs}` : ''}`);
   };
 
-  const filteredBookmarks = searchBookmarks(searchQuery, {
+  const localFiltered = searchBookmarks(searchQuery, {
     topic: urlTopic,
     filter: urlFilter,
     sort: urlSort,
   });
+
+  const displayedBookmarks: Bookmark[] =
+    searchQuery.trim() && hybridResults
+      ? hybridResults.results.map((r) => r.item)
+      : localFiltered;
+
+  // Match lookup
+  const matchMap = new Map<string, { matchType: 'lexical' | 'semantic' | 'hybrid'; score: number }>();
+  if (hybridResults) {
+    hybridResults.results.forEach((r) => {
+      matchMap.set(r.item.id, { matchType: r.matchType, score: r.score });
+    });
+  }
 
   const availableTopics = [
     { slug: 'all', name: 'All Topics' },
@@ -252,8 +301,49 @@ export const BookmarkLibraryView: React.FC = () => {
         </div>
       </div>
 
+      {/* Search Result Overview Bar */}
+      {searchQuery.trim() && (
+        <div className="flex items-center justify-between p-3 bg-[#FFFFFF] border border-[#E8E8E5] rounded-xl text-xs text-[#70706B] shadow-2xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-[#171717]">
+              {hybridResults ? hybridResults.total : displayedBookmarks.length} result(s)
+            </span>
+            <span>for <span className="font-medium text-[#171717]">"{searchQuery.trim()}"</span></span>
+            {hybridResults && (
+              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <Zap className="w-3 h-3 text-emerald-600" />
+                <span>
+                  {hybridResults.mode === 'hybrid'
+                    ? 'Hybrid Search (Vector + BM25)'
+                    : hybridResults.mode === 'semantic'
+                    ? 'Semantic Vector Search'
+                    : 'Full-text Search'}
+                </span>
+                <span className="text-emerald-600">• {hybridResults.latencyMs}ms</span>
+              </span>
+            )}
+            {isSearchingHybrid && (
+              <span className="text-[11px] text-[#8A8A85] flex items-center gap-1 animate-pulse">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Refreshing vectors...
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              updateUrlParams({ q: '' });
+            }}
+            className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium cursor-pointer"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
+
       {/* Bookmarks Feed */}
-      {filteredBookmarks.length === 0 ? (
+      {displayedBookmarks.length === 0 ? (
         <div className="text-center py-16 px-4 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl">
           <BookmarkIcon className="w-8 h-8 text-[#A0A09A] mx-auto mb-3" />
           <h3 className="text-sm font-semibold text-[#171717]">No bookmarks found</h3>
@@ -269,7 +359,7 @@ export const BookmarkLibraryView: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredBookmarks.map((bm) => (
+          {displayedBookmarks.map((bm) => (
             <BookmarkCard
               key={bm.id}
               bookmark={bm}

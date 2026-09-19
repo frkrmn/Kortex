@@ -11,6 +11,8 @@ import {
   FolderPlus,
   FolderKanban,
   ExternalLink,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
@@ -33,6 +35,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     topics,
     collections,
     digests,
+    rediscoveryCandidates,
+    sendRediscoveryFeedback,
     toggleFavorite,
     toggleRead,
     deleteBookmark,
@@ -50,11 +54,22 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   // Recently saved items (4 bookmarks)
   const recentBookmarks = bookmarks.slice(0, 4);
 
-  // Worth revisiting items (~3 older items)
-  const worthRevisiting = bookmarks.slice(4, 7);
+  // Worth revisiting items (powered by Rediscovery Service)
+  const worthRevisitingItems = rediscoveryCandidates.length > 0
+    ? rediscoveryCandidates.slice(0, 3)
+    : bookmarks.slice(4, 7).map((bm) => ({
+        bookmark: bm,
+        reason: 'Saved earlier • Revisit value',
+        daysSinceSaved: 45,
+        score: 0.8,
+      }));
 
   // Top weekly digest
   const featuredDigest = digests[0];
+  const featuredDigestCount = featuredDigest ? (featuredDigest.bookmarks_count ?? featuredDigest.bookmarksCount ?? 0) : 0;
+  const featuredDigestPeriod = featuredDigest?.period || (featuredDigest?.period_start && featuredDigest?.period_end ? `${new Date(featuredDigest.period_start).toLocaleDateString()} – ${new Date(featuredDigest.period_end).toLocaleDateString()}` : 'Recent');
+  const featuredDigestSummary = featuredDigest?.summary || featuredDigest?.overview || (featuredDigest?.key_ideas?.[0] ?? '');
+  const featuredDigestTopics = featuredDigest?.dominant_topics || featuredDigest?.dominantTopics || [];
 
   // Dynamic Topics with percentages for horizontal bars
   const maxTopicCount = Math.max(...topics.map((t) => t.count), 1);
@@ -290,13 +305,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
             <div className="space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] block">
-                Weekly Digest • Sep 7 – 13
+                {featuredDigest.type || 'Weekly'} Digest • {featuredDigestPeriod}
               </span>
               <h3 className="text-base font-bold text-[#171717]">
-                Your week in bookmarks
+                {featuredDigest.title || 'Your week in bookmarks'}
               </h3>
               <p className="text-xs text-[#70706B] max-w-xl">
-                42 Bookmarks · 7 Topics · 6 Key ideas synthesized from your latest saved posts on AI agent architectures and product distribution.
+                {featuredDigestSummary || `${featuredDigestCount} Bookmarks · Synthesized from your latest saved posts.`}
               </p>
             </div>
           </div>
@@ -319,41 +334,72 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {worthRevisiting.map((bm) => (
-            <div
-              key={bm.id}
-              onClick={() => handleBookmarkClick(bm)}
-              className="p-4 bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D5D5CF] rounded-xl shadow-2xs hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={bm.author_avatar}
-                      alt={bm.author_name}
-                      className="w-6 h-6 rounded-full object-cover border border-[#E5E5E0]"
-                    />
-                    <span className="text-xs font-medium text-[#171717]">{bm.author_name}</span>
+          {worthRevisitingItems.map((item) => {
+            const bm = item.bookmark;
+            if (!bm) return null;
+            return (
+              <div
+                key={bm.id}
+                onClick={() => handleBookmarkClick(bm)}
+                className="p-4 bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D5D5CF] rounded-xl shadow-2xs hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={bm.author_avatar}
+                        alt={bm.author_name}
+                        className="w-6 h-6 rounded-full object-cover border border-[#E5E5E0]"
+                      />
+                      <span className="text-xs font-medium text-[#171717]">{bm.author_name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendRediscoveryFeedback(bm.id, 'useful', 'dashboard');
+                        }}
+                        title="Mark useful"
+                        className="p-1 text-[#8A8A85] hover:text-emerald-600 rounded transition-colors"
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendRediscoveryFeedback(bm.id, 'not_relevant', 'dashboard');
+                        }}
+                        title="Not relevant"
+                        className="p-1 text-[#8A8A85] hover:text-[#DC2626] rounded transition-colors"
+                      >
+                        <ThumbsDown className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-[#8A8A85]">Saved 6 mos ago</span>
+
+                  <p className="text-xs text-[#2B2B2B] line-clamp-3 leading-relaxed">
+                    {bm.ai_summary || bm.content}
+                  </p>
+
+                  {item.reason && (
+                    <span className="inline-block text-[10px] font-medium text-[#EA580C] bg-[#FFF7ED] border border-[#FFEDD5] px-1.5 py-0.5 rounded">
+                      {item.reason}
+                    </span>
+                  )}
                 </div>
 
-                <p className="text-xs text-[#2B2B2B] line-clamp-3 leading-relaxed">
-                  {bm.content}
-                </p>
+                <div className="pt-3 mt-3 border-t border-[#F2F2EE] flex items-center justify-between text-[11px] text-[#8A8A85]">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#F4F4F1] text-[#555550]">
+                    {bm.topics?.[0] || 'Saved'}
+                  </span>
+                  <span className="flex items-center gap-1 text-[#2563EB] font-medium">
+                    <span>Revisit</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
               </div>
-
-              <div className="pt-3 mt-3 border-t border-[#F2F2EE] flex items-center justify-between text-[11px] text-[#8A8A85]">
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#F4F4F1] text-[#555550]">
-                  {bm.topics?.[0] || 'Perspective'}
-                </span>
-                <span className="flex items-center gap-1 text-[#2563EB] font-medium">
-                  <span>Revisit</span>
-                  <ArrowRight className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

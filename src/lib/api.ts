@@ -11,6 +11,9 @@ import {
   UserProfile,
   InsightsData,
   SyncProgressState,
+  RediscoveryCandidateItem,
+  EntitlementData,
+  PlanConfig,
 } from '../types';
 
 export const api = {
@@ -138,8 +141,11 @@ export const api = {
     return res.json();
   },
 
-  async getRelatedBookmarks(id: string): Promise<Bookmark[]> {
-    const res = await fetch(`/api/bookmarks/${id}/related`);
+  async getRelatedBookmarks(id: string, limit = 4): Promise<{
+    bookmark: Bookmark;
+    similarity: number;
+  }[]> {
+    const res = await fetch(`/api/bookmarks/${id}/related?limit=${limit}`);
     if (!res.ok) throw new Error('Failed to fetch related bookmarks');
     return res.json();
   },
@@ -212,15 +218,37 @@ export const api = {
   },
 
   // Digests
-  async getDigests(): Promise<Digest[]> {
-    const res = await fetch('/api/digests');
+  async getDigests(userId?: string): Promise<Digest[]> {
+    const url = userId ? `/api/digests?userId=${encodeURIComponent(userId)}` : '/api/digests';
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch digests');
     return res.json();
   },
 
-  async generateDigest(): Promise<Digest> {
-    const res = await fetch('/api/digests/generate', { method: 'POST' });
+  async getDigest(id: string, userId?: string): Promise<Digest> {
+    const url = userId ? `/api/digests/${id}?userId=${encodeURIComponent(userId)}` : `/api/digests/${id}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch digest');
+    return res.json();
+  },
+
+  async generateDigest(options?: { userId?: string; forceRegenerate?: boolean; period?: string }): Promise<Digest> {
+    const res = await fetch('/api/digests/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {}),
+    });
     if (!res.ok) throw new Error('Failed to generate digest');
+    return res.json();
+  },
+
+  async regenerateDigest(id: string, userId?: string): Promise<Digest> {
+    const res = await fetch(`/api/digests/${id}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) throw new Error('Failed to regenerate digest');
     return res.json();
   },
 
@@ -241,42 +269,125 @@ export const api = {
   },
 
   // Insights
-  async getInsights(): Promise<InsightsData> {
-    const res = await fetch('/api/insights');
+  async getInsights(userId?: string): Promise<InsightsData> {
+    const url = userId ? `/api/insights?userId=${encodeURIComponent(userId)}` : '/api/insights';
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch insights');
     return res.json();
   },
 
-  // Chat
-  async getChatThreads(): Promise<ChatThread[]> {
-    const res = await fetch('/api/chat/threads');
+  // Rediscovery & Worth Revisiting
+  async getRediscovery(limit = 4, surface = 'dashboard', userId?: string): Promise<RediscoveryCandidateItem[]> {
+    const params = new URLSearchParams({ limit: String(limit), surface });
+    if (userId) params.set('userId', userId);
+    const res = await fetch(`/api/rediscovery?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch rediscovery candidates');
+    return res.json();
+  },
+
+  async sendRediscoveryFeedback(
+    bookmarkId: string,
+    interaction: 'useful' | 'not_relevant' | 'hide' | 'click' | 'view',
+    surface = 'dashboard',
+    userId?: string
+  ): Promise<any> {
+    const res = await fetch('/api/rediscovery/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookmarkId, interaction, surface, userId }),
+    });
+    if (!res.ok) throw new Error('Failed to submit rediscovery feedback');
+    return res.json();
+  },
+
+  // Chat & Production RAG
+  async getChatThreads(userId?: string): Promise<ChatThread[]> {
+    const url = userId ? `/api/chat/threads?userId=${encodeURIComponent(userId)}` : '/api/chat/threads';
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch chat threads');
     return res.json();
   },
 
-  async createChatThread(title?: string): Promise<ChatThread> {
+  async getChatThread(id: string, userId?: string): Promise<ChatThread> {
+    const url = userId ? `/api/chat/threads/${id}?userId=${encodeURIComponent(userId)}` : `/api/chat/threads/${id}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch chat thread');
+    return res.json();
+  },
+
+  async createChatThread(title?: string, scopeDescription?: string, userId?: string): Promise<ChatThread> {
     const res = await fetch('/api/chat/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, scopeDescription, userId }),
     });
     if (!res.ok) throw new Error('Failed to create chat thread');
     return res.json();
   },
 
-  async sendMessage(threadId: string, message: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
+  async deleteChatThread(id: string, userId?: string): Promise<{ success: boolean }> {
+    const url = userId ? `/api/chat/threads/${id}?userId=${encodeURIComponent(userId)}` : `/api/chat/threads/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete chat thread');
+    return res.json();
+  },
+
+  async askRecallly(params: {
+    question: string;
+    threadId?: string;
+    scope?: {
+      collectionId?: string;
+      bookmarkIds?: string[];
+      topic?: string;
+      scopeDescription?: string;
+    };
+    filters?: any;
+    userId?: string;
+  }): Promise<{
+    threadId: string;
+    answer: string;
+    citedSources: any[];
+    allRetrievedSources: any[];
+    sufficiency: 'sufficient' | 'partial' | 'insufficient';
+    metrics: {
+      retrievalLatencyMs: number;
+      generationLatencyMs: number;
+      totalLatencyMs: number;
+      sourcesRetrieved: number;
+      sourcesCited: number;
+      confidence: number;
+      retrievalMode: 'hybrid' | 'lexical' | 'semantic';
+    };
+  }> {
+    const res = await fetch('/api/chat/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'RAG query failed' }));
+      throw new Error(err.error || 'Failed to ask Recallly');
+    }
+    return res.json();
+  },
+
+  async sendMessage(
+    threadId: string,
+    message: string,
+    scope?: { collectionId?: string; bookmarkIds?: string[]; topic?: string; scopeDescription?: string }
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
     const res = await fetch(`/api/chat/threads/${threadId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, scope }),
     });
     if (!res.ok) throw new Error('Failed to send chat message');
     return res.json();
   },
 
-  // Subscription
+  // Subscription & Commercial Billing
   async getSubscription(): Promise<Subscription> {
-    const res = await fetch('/api/subscription');
+    const res = await fetch('/api/billing/subscription');
     if (!res.ok) throw new Error('Failed to fetch subscription');
     return res.json();
   },
@@ -287,10 +398,133 @@ export const api = {
     return res.json();
   },
 
+  async getBillingConfig(): Promise<{
+    plans: Record<string, PlanConfig>;
+    defaultTrialDays: number;
+    isStripeConfigured: boolean;
+  }> {
+    const res = await fetch('/api/billing/config');
+    if (!res.ok) throw new Error('Failed to fetch billing configuration');
+    return res.json();
+  },
+
+  async getEntitlements(): Promise<EntitlementData> {
+    const res = await fetch('/api/billing/entitlements');
+    if (!res.ok) throw new Error('Failed to fetch entitlements');
+    return res.json();
+  },
+
+  async createCheckoutSession(params: {
+    plan?: string;
+    interval?: 'monthly' | 'yearly';
+    userEmail?: string;
+  }): Promise<{ url: string; sessionId?: string; isMock?: boolean }> {
+    const res = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to initiate checkout');
+    }
+    return res.json();
+  },
+
+  async createPortalSession(): Promise<{ url: string; isMock?: boolean }> {
+    const res = await fetch('/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to open billing portal');
+    }
+    return res.json();
+  },
+
+  async simulateSubscription(params: {
+    plan: 'free' | 'pro';
+    status?: string;
+    interval?: 'monthly' | 'yearly';
+  }): Promise<{ subscription: Subscription; entitlements: EntitlementData }> {
+    const res = await fetch('/api/billing/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) throw new Error('Failed to simulate subscription');
+    return res.json();
+  },
+
   // Global Search (Cmd+K)
-  async globalSearch(q: string): Promise<{ bookmarks: Bookmark[]; collections: Collection[]; topics: Topic[] }> {
+  async globalSearch(q: string): Promise<{
+    bookmarks: Bookmark[];
+    searchResults?: any[];
+    collections: Collection[];
+    topics: Topic[];
+    searchMode?: string;
+    latencyMs?: number;
+  }> {
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
     if (!res.ok) throw new Error('Failed to perform global search');
+    return res.json();
+  },
+
+  // Hybrid & Semantic Vector Search
+  async searchHybrid(
+    query: string,
+    filters?: {
+      topic?: string;
+      source?: string;
+      filter?: 'all' | 'unread' | 'favorites' | 'recent';
+      dateFrom?: string;
+      dateTo?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<{
+    query: string;
+    results: {
+      item: Bookmark;
+      score: number;
+      matchType: 'lexical' | 'semantic' | 'hybrid';
+    }[];
+    total: number;
+    mode: 'hybrid' | 'lexical' | 'semantic';
+    latencyMs: number;
+  }> {
+    const params = new URLSearchParams();
+    params.set('q', query);
+    if (filters?.topic && filters.topic !== 'all') params.set('topic', filters.topic);
+    if (filters?.source && filters.source !== 'all') params.set('source', filters.source);
+    if (filters?.filter && filters.filter !== 'all') params.set('filter', filters.filter);
+    if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom);
+    if (filters?.dateTo) params.set('dateTo', filters.dateTo);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+
+    const res = await fetch(`/api/search/hybrid?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to execute hybrid search');
+    return res.json();
+  },
+
+  // Embedding Status & Backfill
+  async getEmbeddingStatus(): Promise<{
+    totalBookmarks: number;
+    embeddedCount: number;
+    pendingJobs: number;
+    processingJobs: number;
+    failedJobs: number;
+  }> {
+    const res = await fetch('/api/embeddings/status');
+    if (!res.ok) throw new Error('Failed to fetch embedding status');
+    return res.json();
+  },
+
+  async triggerEmbeddingBackfill(): Promise<{ success: boolean; enqueuedCount: number }> {
+    const res = await fetch('/api/embeddings/backfill', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger embedding backfill');
     return res.json();
   },
 
@@ -344,6 +578,51 @@ export const api = {
   }> {
     const res = await fetch('/api/ai/usage');
     if (!res.ok) throw new Error('Failed to fetch AI usage');
+    return res.json();
+  },
+
+  // Phase 12 Background Automation & Reliability
+  async getBackgroundStatus(): Promise<{
+    metrics: any;
+    recentJobs: any[];
+    recentDeliveries: any[];
+  }> {
+    const res = await fetch('/api/background/status');
+    if (!res.ok) throw new Error('Failed to fetch background status');
+    return res.json();
+  },
+
+  async triggerCronTick(): Promise<any> {
+    const res = await fetch('/api/cron/tick', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger cron tick');
+    return res.json();
+  },
+
+  async triggerCronSync(): Promise<any> {
+    const res = await fetch('/api/cron/sync', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger cron sync');
+    return res.json();
+  },
+
+  async triggerCronDigests(): Promise<any> {
+    const res = await fetch('/api/cron/digests', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger cron digests');
+    return res.json();
+  },
+
+  async triggerBackgroundRun(action: string, options?: any): Promise<any> {
+    const res = await fetch('/api/background/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...options }),
+    });
+    if (!res.ok) throw new Error(`Failed to trigger background run ${action}`);
+    return res.json();
+  },
+
+  async deliverDigestEmail(digestId: string): Promise<any> {
+    const res = await fetch(`/api/digests/${digestId}/deliver`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to deliver digest email');
     return res.json();
   },
 

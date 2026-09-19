@@ -13,6 +13,11 @@ export interface AIConfig {
   version: string;
   confidenceThreshold: number;
   maxContentLength: number;
+  ragModel: string;
+  ragTemperature: number;
+  ragMaxSources: number;
+  ragSufficiencyThreshold: number;
+  ragMaxContextTokens: number;
 }
 
 export function getAIConfig(): AIConfig {
@@ -51,6 +56,11 @@ export function getAIConfig(): AIConfig {
     version: 'v1.0',
     confidenceThreshold: 0.70,
     maxContentLength: 4000,
+    ragModel: provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini',
+    ragTemperature: 0.2,
+    ragMaxSources: 8,
+    ragSufficiencyThreshold: 0.22,
+    ragMaxContextTokens: 3500,
   };
 }
 

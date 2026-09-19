@@ -22,6 +22,8 @@ import {
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
+import { api } from '../lib/api';
+import { Bookmark } from '../types';
 
 export const BookmarkDetailView: React.FC = () => {
   const { params, navigate } = useRouter();
@@ -58,7 +60,28 @@ export const BookmarkDetailView: React.FC = () => {
     );
   }
 
-  const relatedBookmarks = getRelatedBookmarks(bookmark.id, 3);
+  const fallbackRelated = getRelatedBookmarks(bookmark.id, 3);
+  const [vectorRelated, setVectorRelated] = useState<{ bookmark: Bookmark; similarity: number }[]>([]);
+
+  React.useEffect(() => {
+    let isSubscribed = true;
+    api.getRelatedBookmarks(bookmark.id, 3)
+      .then((items) => {
+        if (isSubscribed && items && items.length > 0) {
+          setVectorRelated(items);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch vector-related bookmarks:', err);
+      });
+    return () => {
+      isSubscribed = false;
+    };
+  }, [bookmark.id]);
+
+  const relatedBookmarks = vectorRelated.length > 0
+    ? vectorRelated.map(r => ({ ...r.bookmark, _similarity: r.similarity }))
+    : fallbackRelated.map(b => ({ ...b, _similarity: undefined }));
 
   const formattedDate = new Date(bookmark.bookmark_created_at).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -111,6 +134,15 @@ export const BookmarkDetailView: React.FC = () => {
           >
             <Heart className={`w-3.5 h-3.5 ${bookmark.is_favorite ? 'fill-rose-500' : ''}`} />
             <span>{bookmark.is_favorite ? 'Favorited' : 'Favorite'}</span>
+          </button>
+
+          <button
+            onClick={() => navigate(`/ask?bookmarkId=${bookmark.id}`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EEF4FF] border border-[#DBEAFE] hover:bg-[#DBEAFE] text-xs font-semibold text-[#2563EB] transition-colors cursor-pointer"
+            title="Ask conversational AI questions scoped to this bookmark"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span>Ask AI</span>
           </button>
 
           <a
@@ -433,7 +465,11 @@ export const BookmarkDetailView: React.FC = () => {
                 </div>
 
                 <div className="pt-3 mt-3 border-t border-[#F0F0EC] flex items-center justify-between text-[11px] text-[#8A8A85]">
-                  <span>{rel.topics?.[0] || 'Saved'}</span>
+                  <span>
+                    {(rel as any)._similarity !== undefined
+                      ? `${Math.round((rel as any)._similarity * 100)}% match`
+                      : rel.topics?.[0] || 'Saved'}
+                  </span>
                   <span className="text-[#2563EB] font-medium">View →</span>
                 </div>
               </div>

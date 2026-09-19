@@ -13,10 +13,21 @@ import {
   UserProfile,
   InsightsData,
   SyncProgressState,
+  UsageEventRecord,
 } from '../src/types';
 import { GeminiAIProvider } from './ai/gemini-provider';
 import { ProcessingJobRecord, AIUsageRecord, SavedItemEmbeddingRecord } from './ai/types';
 import { slugifyTopic } from './ai/topic-normalizer';
+import { DigestService } from './intelligence/digest-service';
+import { rediscoveryService } from './intelligence/rediscovery-service';
+import { insightsService } from './intelligence/insights-service';
+import {
+  RediscoveryRecord,
+  RediscoveryFeedbackInput,
+  RediscoveryCandidate,
+  DigestGenerationOptions,
+} from './intelligence/types';
+import { JobQueueRecord, EmailDeliveryRecord } from './background/types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_FILE = path.join(DATA_DIR, 'kortex-store.json');
@@ -31,10 +42,16 @@ export interface AppStoreData {
   digestSettings: DigestSettings;
   chatThreads: ChatThread[];
   subscription: Subscription;
+  subscriptions?: Record<string, Subscription>;
   syncProgress: SyncProgressState;
   processingJobs: ProcessingJobRecord[];
   aiUsage: AIUsageRecord[];
   embeddings: SavedItemEmbeddingRecord[];
+  rediscoveryEvents?: RediscoveryRecord[];
+  usageEvents?: UsageEventRecord[];
+  billingEvents?: any[];
+  jobQueue?: JobQueueRecord[];
+  emailDeliveries?: EmailDeliveryRecord[];
 }
 
 const INITIAL_TOPICS: Topic[] = [
@@ -379,9 +396,11 @@ const INITIAL_DIGESTS: Digest[] = [
 export class AppStore {
   private data: AppStoreData;
   private aiProvider: GeminiAIProvider;
+  private digestService: DigestService;
 
   constructor() {
     this.aiProvider = new GeminiAIProvider();
+    this.digestService = new DigestService(this.aiProvider);
     this.data = this.loadInitialData();
   }
 
@@ -396,6 +415,12 @@ export class AppStore {
         const parsed = JSON.parse(raw);
         parsed.processingJobs = Array.isArray(parsed.processingJobs) ? parsed.processingJobs : [];
         parsed.aiUsage = Array.isArray(parsed.aiUsage) ? parsed.aiUsage : [];
+        parsed.embeddings = Array.isArray(parsed.embeddings) ? parsed.embeddings : [];
+        parsed.rediscoveryEvents = Array.isArray(parsed.rediscoveryEvents) ? parsed.rediscoveryEvents : [];
+        parsed.usageEvents = Array.isArray(parsed.usageEvents) ? parsed.usageEvents : [];
+        parsed.billingEvents = Array.isArray(parsed.billingEvents) ? parsed.billingEvents : [];
+        parsed.jobQueue = Array.isArray(parsed.jobQueue) ? parsed.jobQueue : [];
+        parsed.emailDeliveries = Array.isArray(parsed.emailDeliveries) ? parsed.emailDeliveries : [];
         if (Array.isArray(parsed.bookmarks)) {
           for (const b of parsed.bookmarks) {
             if (!b.enrichment_status) {
@@ -557,6 +582,10 @@ export class AppStore {
       },
       processingJobs: [],
       aiUsage: [],
+      embeddings: [],
+      rediscoveryEvents: [],
+      jobQueue: [],
+      emailDeliveries: [],
     };
 
     this.persist(defaultData);
@@ -598,13 +627,19 @@ export class AppStore {
   }
 
   // Bookmarks
-  getBookmarks(params?: {
+  getBookmarks(paramsOrUserId?: string | {
+    userId?: string;
     query?: string;
     topic?: string;
     filter?: 'all' | 'unread' | 'favorites' | 'recent';
     sort?: 'newest' | 'oldest' | 'relevant';
   }): Bookmark[] {
+    const params = typeof paramsOrUserId === 'string' ? { userId: paramsOrUserId } : paramsOrUserId;
     let list = [...this.data.bookmarks];
+
+    if (params?.userId) {
+      list = list.filter(b => !b.user_id || b.user_id === params.userId);
+    }
 
     if (params?.filter === 'unread') {
       list = list.filter(b => !b.is_read);
@@ -638,21 +673,59 @@ export class AppStore {
     return list;
   }
 
-  getBookmarkById(id: string): Bookmark | undefined {
-    return this.data.bookmarks.find(b => b.id === id);
+  getBookmarkById(id: string, userId?: string): Bookmark | undefined {
+    const b = this.data.bookmarks.find(item => item.id === id);
+    if (!b) return undefined;
+    if (!userId) {
+      // Unauthenticated access: allowed only if part of a public collection
+      const isPublic = this.data.collections.some(c => c.visibility === 'public' && c.bookmark_ids.includes(id));
+      return isPublic ? b : undefined;
+    }
+    // If owned by the user or part of a public collection
+    if (!b.user_id || b.user_id === userId || b.user_id === 'user_default') return b;
+    const isPublic = this.data.collections.some(c => c.visibility === 'public' && c.bookmark_ids.includes(id));
+    return isPublic ? b : undefined;
   }
 
-  updateBookmark(id: string, updates: Partial<Bookmark>): Bookmark | null {
+  updateBookmark(id: string, updates: Partial<Bookmark>, userId?: string): Bookmark | null {
     const idx = this.data.bookmarks.findIndex(b => b.id === id);
     if (idx !== -1) {
-      this.data.bookmarks[idx] = { ...this.data.bookmarks[idx], ...updates };
+      const existing = this.data.bookmarks[idx];
+      if (userId && existing.user_id && existing.user_id !== userId && existing.user_id !== 'user_default') {
+        return null; // IDOR protection: cannot edit another user's bookmark
+      }
+      this.data.bookmarks[idx] = { ...existing, ...updates };
       this.persist();
       return this.data.bookmarks[idx];
     }
     return null;
   }
 
-  addBookmark(b: Bookmark): Bookmark {
+  deleteBookmark(id: string, userId?: string): boolean {
+    const idx = this.data.bookmarks.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      const existing = this.data.bookmarks[idx];
+      if (userId && existing.user_id && existing.user_id !== userId && existing.user_id !== 'user_default') {
+        return false; // IDOR protection: cannot delete another user's bookmark
+      }
+      this.data.bookmarks.splice(idx, 1);
+      // Remove from collections
+      for (const col of this.data.collections) {
+        col.bookmark_ids = col.bookmark_ids.filter(bId => bId !== id);
+      }
+      // Remove corresponding embeddings
+      this.data.embeddings = this.data.embeddings.filter(e => e.savedItemId !== id);
+      this.updateTopicCounts();
+      this.persist();
+      return true;
+    }
+    return false;
+  }
+
+  addBookmark(b: Bookmark, userId?: string): Bookmark {
+    if (userId) {
+      b.user_id = userId;
+    }
     this.data.bookmarks.unshift(b);
     this.updateTopicCounts();
     this.persist();
@@ -688,12 +761,13 @@ export class AppStore {
   }
 
   // Rediscover ("Worth revisiting")
-  getRediscoverBookmarks(limit = 4): Bookmark[] {
+  getRediscoverBookmarks(limit = 4, userId?: string): Bookmark[] {
     // Surface valuable bookmarks saved weeks/months ago that user might have forgotten
     const now = Date.now();
     const twoWeeksAgo = now - 1000 * 60 * 60 * 24 * 14;
 
-    const olderHighValue = this.data.bookmarks.filter(b => {
+    const userBookmarks = this.getBookmarks(userId);
+    const olderHighValue = userBookmarks.filter(b => {
       const created = new Date(b.bookmark_created_at).getTime();
       return created < twoWeeksAgo;
     });
@@ -701,7 +775,7 @@ export class AppStore {
     if (olderHighValue.length > 0) {
       return olderHighValue.slice(0, limit);
     }
-    return this.data.bookmarks.slice(-limit);
+    return userBookmarks.slice(-limit);
   }
 
   // Topics
@@ -792,19 +866,44 @@ export class AppStore {
   }
 
   // Collections
-  getCollections(): Collection[] {
-    return this.data.collections;
+  getCollections(userId?: string): Collection[] {
+    if (!userId) {
+      // Unauthenticated: only public collections
+      return this.data.collections.filter(c => c.visibility === 'public');
+    }
+    return this.data.collections.filter(
+      c => c.user_id === userId || c.user_id === 'user_default' || c.visibility === 'public'
+    );
   }
 
-  getCollectionBySlug(slug: string): Collection | undefined {
-    return this.data.collections.find(c => c.slug === slug);
+  getCollectionBySlug(slug: string, userId?: string): Collection | undefined {
+    const col = this.data.collections.find(c => c.slug === slug);
+    if (!col) return undefined;
+    if (col.visibility === 'public') return col;
+    if (!userId) return undefined;
+    if (col.user_id === userId || col.user_id === 'user_default') return col;
+    return undefined;
   }
 
-  createCollection(name: string, description: string, visibility: 'private' | 'public' = 'private'): Collection {
+  getCollectionById(id: string, userId?: string): Collection | undefined {
+    const col = this.data.collections.find(c => c.id === id);
+    if (!col) return undefined;
+    if (col.visibility === 'public') return col;
+    if (!userId) return undefined;
+    if (col.user_id === userId || col.user_id === 'user_default') return col;
+    return undefined;
+  }
+
+  createCollection(
+    name: string,
+    description: string,
+    visibility: 'private' | 'public' = 'private',
+    userId: string = 'user_default'
+  ): Collection {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newCol: Collection = {
       id: `col_${Date.now()}`,
-      user_id: 'user_default',
+      user_id: userId,
       name,
       slug: slug || `collection-${Date.now()}`,
       description,
@@ -819,9 +918,12 @@ export class AppStore {
     return newCol;
   }
 
-  updateCollection(id: string, updates: Partial<Collection>): Collection | null {
+  updateCollection(id: string, updates: Partial<Collection>, userId?: string): Collection | null {
     const col = this.data.collections.find(c => c.id === id);
     if (col) {
+      if (userId && col.user_id && col.user_id !== userId && col.user_id !== 'user_default') {
+        return null; // IDOR protection: cannot edit another user's collection
+      }
       Object.assign(col, { ...updates, updated_at: new Date().toISOString() });
       this.persist();
       return col;
@@ -829,9 +931,13 @@ export class AppStore {
     return null;
   }
 
-  deleteCollection(id: string): boolean {
+  deleteCollection(id: string, userId?: string): boolean {
     const idx = this.data.collections.findIndex(c => c.id === id);
     if (idx !== -1) {
+      const existing = this.data.collections[idx];
+      if (userId && existing.user_id && existing.user_id !== userId && existing.user_id !== 'user_default') {
+        return false; // IDOR protection: cannot delete another user's collection
+      }
       this.data.collections.splice(idx, 1);
       this.persist();
       return true;
@@ -839,9 +945,12 @@ export class AppStore {
     return false;
   }
 
-  toggleBookmarkInCollection(collectionId: string, bookmarkId: string): Collection | null {
+  toggleBookmarkInCollection(collectionId: string, bookmarkId: string, userId?: string): Collection | null {
     const col = this.data.collections.find(c => c.id === collectionId);
     if (!col) return null;
+    if (userId && col.user_id && col.user_id !== userId && col.user_id !== 'user_default') {
+      return null; // IDOR protection
+    }
 
     if (col.bookmark_ids.includes(bookmarkId)) {
       col.bookmark_ids = col.bookmark_ids.filter(id => id !== bookmarkId);
@@ -851,7 +960,7 @@ export class AppStore {
     col.updated_at = new Date().toISOString();
 
     // Also update bookmark.collection_ids
-    const b = this.getBookmarkById(bookmarkId);
+    const b = this.getBookmarkById(bookmarkId, userId);
     if (b) {
       b.collection_ids = b.collection_ids || [];
       if (b.collection_ids.includes(collectionId)) {
@@ -866,8 +975,14 @@ export class AppStore {
   }
 
   // Digests
-  getDigests(): Digest[] {
-    return this.data.digests;
+  getDigests(userId: string = 'user_default'): Digest[] {
+    const list = this.data.digests.filter(d => !d.user_id || d.user_id === userId);
+    return list.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
+  }
+
+  getDigestById(id: string, userId: string = 'user_default'): Digest | null {
+    const digest = this.data.digests.find(d => d.id === id && (!d.user_id || d.user_id === userId));
+    return digest || null;
   }
 
   getDigestSettings(): DigestSettings {
@@ -880,102 +995,210 @@ export class AppStore {
     return this.data.digestSettings;
   }
 
-  async generateNewDigest(): Promise<Digest> {
-    const periodLabel = `March ${new Date().getDate() - 7} – ${new Date().getDate()}`;
-    const digestResult = await this.aiProvider.generateDigest(this.data.bookmarks, periodLabel);
+  addDigest(digest: Digest): Digest {
+    const existingIndex = this.data.digests.findIndex(
+      d => (d.user_id === digest.user_id || !d.user_id) &&
+           d.period_start === digest.period_start &&
+           d.period_end === digest.period_end
+    );
+    if (existingIndex >= 0) {
+      this.data.digests[existingIndex] = digest;
+    } else {
+      this.data.digests.unshift(digest);
+    }
+    this.persist();
+    return digest;
+  }
 
-    const newDigest: Digest = {
-      id: `dig_${Date.now()}`,
-      user_id: 'user_default',
-      period_start: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-      period_end: new Date().toISOString(),
-      status: 'sent',
-      title: digestResult.title,
-      bookmarks_count: this.data.bookmarks.length,
-      topics_count: digestResult.topic_groups.length,
-      key_ideas_count: digestResult.key_ideas.length,
-      topic_groups: digestResult.topic_groups,
-      key_ideas: digestResult.key_ideas,
-      worth_revisiting_ids: digestResult.worth_revisiting_ids,
-      created_at: new Date().toISOString(),
-      sent_at: new Date().toISOString(),
-    };
+  getRediscoveryEvents(userId: string = 'user_default'): RediscoveryRecord[] {
+    return (this.data.rediscoveryEvents || []).filter(e => !e.user_id || e.user_id === userId);
+  }
 
-    this.data.digests.unshift(newDigest);
+  async generateNewDigest(userId: string = 'user_default', options?: DigestGenerationOptions): Promise<Digest> {
+    const userBookmarks = this.data.bookmarks.filter(b => !b.user_id || b.user_id === userId);
+    const userEvents = (this.data.rediscoveryEvents || []).filter(e => !e.user_id || e.user_id === userId);
+
+    const newDigest = await this.digestService.generateDigest(
+      userId,
+      userBookmarks,
+      userEvents,
+      this.data.digestSettings,
+      options
+    );
+
+    // Check for existing digest with matching period for idempotency
+    const existingIndex = this.data.digests.findIndex(
+      d => (d.user_id === userId || !d.user_id) &&
+           d.period_start === newDigest.period_start &&
+           d.period_end === newDigest.period_end
+    );
+
+    if (existingIndex >= 0) {
+      if (options?.forceRegenerate) {
+        newDigest.id = this.data.digests[existingIndex].id;
+        this.data.digests[existingIndex] = newDigest;
+      } else {
+        return this.data.digests[existingIndex];
+      }
+    } else {
+      this.data.digests.unshift(newDigest);
+    }
+
+    // Record rediscovery events for items in worth_revisiting_ids
+    if (newDigest.worth_revisiting_ids && newDigest.worth_revisiting_ids.length > 0) {
+      this.data.rediscoveryEvents = this.data.rediscoveryEvents || [];
+      const nowIso = new Date().toISOString();
+      for (const id of newDigest.worth_revisiting_ids) {
+        this.data.rediscoveryEvents.push({
+          id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          user_id: userId,
+          saved_item_id: id,
+          surface: 'digest',
+          surfaced_at: nowIso,
+          created_at: nowIso,
+        });
+      }
+    }
+
     this.persist();
     return newDigest;
   }
 
-  // Insights
-  getInsights(): InsightsData {
-    const total = this.data.bookmarks.length;
-    const topicCounts: Record<string, number> = {};
-    for (const b of this.data.bookmarks) {
-      for (const t of b.topics) {
-        topicCounts[t] = (topicCounts[t] || 0) + 1;
+  async regenerateDigest(id: string, userId: string = 'user_default'): Promise<Digest | null> {
+    const existing = this.getDigestById(id, userId);
+    if (!existing) return null;
+
+    return this.generateNewDigest(userId, {
+      forceRegenerate: true,
+      targetDate: new Date(existing.period_start),
+    });
+  }
+
+  // Rediscovery
+  getRediscoveryCandidates(
+    userId: string = 'user_default',
+    options?: { limit?: number; surface?: 'dashboard' | 'digest' | 'insights' }
+  ): RediscoveryCandidate[] {
+    const userBookmarks = this.data.bookmarks.filter(b => !b.user_id || b.user_id === userId);
+    const userEvents = (this.data.rediscoveryEvents || []).filter(e => !e.user_id || e.user_id === userId);
+
+    const candidates = rediscoveryService.scoreCandidates(userBookmarks, userEvents, {
+      limit: options?.limit ?? 4,
+      minAgeDays: 14,
+      surface: options?.surface ?? 'dashboard',
+    });
+
+    if (options?.surface) {
+      this.data.rediscoveryEvents = this.data.rediscoveryEvents || [];
+      const nowIso = new Date().toISOString();
+      for (const c of candidates) {
+        this.data.rediscoveryEvents.push({
+          id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          user_id: userId,
+          saved_item_id: c.bookmark.id,
+          surface: options.surface,
+          surfaced_at: nowIso,
+          interaction: 'view',
+          created_at: nowIso,
+        });
       }
+      this.persist();
     }
 
-    const topicDistribution = Object.entries(topicCounts)
-      .map(([name, count]) => ({
-        name,
-        count,
-        percentage: Math.round((count / (total || 1)) * 100),
-      }))
-      .sort((a, b) => b.count - a.count);
+    return candidates;
+  }
 
-    const emergingInterests = [
-      {
-        topic: 'AI Agent Architectures',
-        growth: '+48%',
-        explanation: 'You saved 7 posts this month exploring LLM OS patterns, evaluation harnesses, and iterative reflection loops.',
-      },
-      {
-        topic: 'Solopreneur / Minimal Stacks',
-        growth: '+32%',
-        explanation: 'Increased interest in SQLite, single-binary deploys, and bootstrapped capital-efficient software models.',
-      },
-      {
-        topic: 'Design Tokens & Craft',
-        growth: '+19%',
-        explanation: 'Growing collection of posts regarding semantic UI tokens and closing the gap between design and engineering.',
-      },
-    ];
+  recordRediscoveryFeedback(input: RediscoveryFeedbackInput): RediscoveryRecord {
+    this.data.rediscoveryEvents = this.data.rediscoveryEvents || [];
+    const nowIso = new Date().toISOString();
+    const record: RediscoveryRecord = {
+      id: `rev_fb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      user_id: input.userId || 'user_default',
+      saved_item_id: input.bookmarkId,
+      surface: input.surface,
+      interaction: input.interaction,
+      surfaced_at: nowIso,
+      created_at: nowIso,
+    };
 
-    const forgottenKnowledge = this.getRediscoverBookmarks(3);
+    this.data.rediscoveryEvents.push(record);
+    this.persist();
+    return record;
+  }
 
-    const connections = [
-      {
-        theme: 'Autonomous Agents & System Engineering',
-        description: 'You frequently connect posts about LLM reasoning with distributed operating systems and evaluation testing harnesses.',
-        bookmark_ids: ['bm_x_101', 'bm_x_102', 'bm_x_110'],
-      },
-      {
-        theme: 'High-Velocity Product Execution',
-        description: 'A recurring link between founder resourcefulness, instantaneous onboarding, and elimination of bureaucratic ceremonies.',
-        bookmark_ids: ['bm_x_103', 'bm_x_104', 'bm_x_107', 'bm_x_111'],
-      },
-    ];
+  // Insights (Real deterministic intelligence calculations)
+  getInsights(userId: string = 'user_default'): any {
+    const userBookmarks = this.data.bookmarks.filter(b => !b.user_id || b.user_id === userId);
+    const userEvents = (this.data.rediscoveryEvents || []).filter(e => !e.user_id || e.user_id === userId);
+    const total = userBookmarks.length;
+
+    const topicDistribution = insightsService.calculateTopicDistribution(userBookmarks);
+    const emergingInterests = insightsService.calculateEmergingInterests(userBookmarks);
+    const rediscoveryCandidates = rediscoveryService.scoreCandidates(userBookmarks, userEvents, {
+      limit: 4,
+      minAgeDays: 14,
+      surface: 'insights',
+    });
+    const forgottenKnowledge = rediscoveryCandidates.map(c => c.bookmark);
+    const ideaConnections = insightsService.calculateTopicConnections(userBookmarks);
+    const savingActivityTimeline = insightsService.calculateSavingTimeline(userBookmarks);
+
+    const avgBookmarksPerWeek = total > 0 ? Math.max(1, Math.round(total / 12)) : 0;
+    const completedCount = userBookmarks.filter(b => b.is_read).length;
+    const readingCompletionRate = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+    const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    for (const b of userBookmarks) {
+      const d = new Date(b.bookmark_created_at || b.imported_at).getDay();
+      dayCounts[d]++;
+    }
+    const maxDayIdx = dayCounts.indexOf(Math.max(...dayCounts));
+    const peakSavingDay = dayNames[maxDayIdx] || 'Wednesday';
 
     return {
+      total_bookmarks: total,
+      topics_distribution: topicDistribution,
       topicDistribution,
       emergingInterests,
+      ideaConnections,
+      connections: ideaConnections.map(c => ({
+        theme: `${c.sourceTopic} & ${c.targetTopic}`,
+        description: c.connectionSummary,
+        bookmark_ids: c.supportingBookmarkIds,
+      })),
       forgottenKnowledge,
-      connections,
+      savingActivityTimeline,
+      top_sources: [
+        { source: 'twitter', count: total, percentage: 100 },
+      ],
+      peak_saving_day: peakSavingDay,
+      avg_bookmarks_per_week: avgBookmarksPerWeek,
+      reading_completion_rate: readingCompletionRate,
     };
   }
 
   // Chat RAG
-  getChatThreads(): ChatThread[] {
-    return this.data.chatThreads;
+  getChatThreads(userId: string = 'user_default'): ChatThread[] {
+    this.data.chatThreads = this.data.chatThreads || [];
+    return this.data.chatThreads.filter(t => !t.user_id || t.user_id === userId);
   }
 
-  createChatThread(firstMessage?: string): ChatThread {
-    const title = firstMessage ? firstMessage.slice(0, 32) + '...' : 'New Exploration';
+  getChatThreadById(id: string, userId: string = 'user_default'): ChatThread | undefined {
+    this.data.chatThreads = this.data.chatThreads || [];
+    return this.data.chatThreads.find(t => t.id === id && (!t.user_id || t.user_id === userId));
+  }
+
+  createChatThread(firstMessage?: string, userId: string = 'user_default', scopeDescription?: string): ChatThread {
+    this.data.chatThreads = this.data.chatThreads || [];
+    const title = firstMessage
+      ? (firstMessage.length > 40 ? firstMessage.slice(0, 40) + '...' : firstMessage)
+      : 'New Exploration';
     const newThread: ChatThread = {
-      id: `thread_${Date.now()}`,
-      user_id: 'user_default',
+      id: `thread_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      user_id: userId,
       title,
+      scope_description: scopeDescription,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       messages: [],
@@ -983,6 +1206,29 @@ export class AppStore {
     this.data.chatThreads.unshift(newThread);
     this.persist();
     return newThread;
+  }
+
+  deleteChatThread(id: string, userId: string = 'user_default'): boolean {
+    this.data.chatThreads = this.data.chatThreads || [];
+    const idx = this.data.chatThreads.findIndex(t => t.id === id && (!t.user_id || t.user_id === userId));
+    if (idx !== -1) {
+      this.data.chatThreads.splice(idx, 1);
+      this.persist();
+      return true;
+    }
+    return false;
+  }
+
+  addChatMessage(threadId: string, message: ChatMessage, userId: string = 'user_default'): ChatMessage | null {
+    let thread = this.getChatThreadById(threadId, userId);
+    if (!thread) {
+      thread = this.createChatThread(message.content, userId);
+      message.thread_id = thread.id;
+    }
+    thread.messages.push(message);
+    thread.updated_at = new Date().toISOString();
+    this.persist();
+    return message;
   }
 
   async askChat(threadId: string, userMessageText: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
@@ -1052,21 +1298,148 @@ export class AppStore {
     return { userMessage, assistantMessage };
   }
 
-  // Subscription
-  getSubscription(): Subscription {
-    return this.data.subscription;
+  // Subscription & Entitlements Store Methods
+  getSubscription(userId: string = 'user_default'): Subscription {
+    if (!this.data.subscriptions) {
+      this.data.subscriptions = {};
+    }
+    if (!this.data.subscriptions[userId]) {
+      if (userId === 'user_default' && this.data.subscription) {
+        this.data.subscriptions[userId] = this.data.subscription;
+      } else {
+        this.data.subscriptions[userId] = {
+          user_id: userId,
+          provider: 'stripe',
+          status: 'trialing',
+          plan: 'free',
+          interval: 'monthly',
+          price_monthly: 9,
+          trial_days_left: 7,
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+        };
+      }
+      this.persist();
+    }
+    return this.data.subscriptions[userId];
   }
 
-  upgradeSubscription(): Subscription {
-    this.data.subscription = {
-      ...this.data.subscription,
+  updateSubscription(
+    first: string | Partial<Subscription>,
+    second?: Partial<Subscription>
+  ): Subscription {
+    let targetUserId = 'user_default';
+    let updates: Partial<Subscription>;
+
+    if (typeof first === 'string') {
+      targetUserId = first;
+      updates = second || {};
+    } else {
+      updates = first;
+      if (updates.user_id) {
+        targetUserId = updates.user_id;
+      }
+    }
+
+    const current = this.getSubscription(targetUserId);
+    const updated = {
+      ...current,
+      ...updates,
+    };
+    if (!this.data.subscriptions) {
+      this.data.subscriptions = {};
+    }
+    this.data.subscriptions[targetUserId] = updated;
+    if (targetUserId === 'user_default') {
+      this.data.subscription = updated;
+    }
+    this.persist();
+    return updated;
+  }
+
+  upgradeSubscription(userId: string = 'user_default'): Subscription {
+    return this.updateSubscription(userId, {
       status: 'active',
       plan: 'pro',
+      interval: 'monthly',
       trial_days_left: 0,
+      current_period_start: new Date().toISOString(),
       current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
+      cancel_at_period_end: false,
+    });
+  }
+
+  getSubscriptionByCustomerId(customerId: string): Subscription | undefined {
+    if (this.data.subscriptions) {
+      const found = Object.values(this.data.subscriptions).find(s => s.customer_id === customerId);
+      if (found) return found;
+    }
+    if (this.data.subscription?.customer_id === customerId) {
+      return this.data.subscription;
+    }
+    return undefined;
+  }
+
+  // Usage Metering Store Methods
+  addUsageEvent(record: Omit<UsageEventRecord, 'id' | 'created_at'>): UsageEventRecord {
+    this.data.usageEvents = this.data.usageEvents || [];
+    const event: UsageEventRecord = {
+      ...record,
+      id: `usg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      created_at: new Date().toISOString(),
     };
+    this.data.usageEvents.unshift(event);
     this.persist();
-    return this.data.subscription;
+    return event;
+  }
+
+  getUsageEvents(userId: string, periodStartIso?: string): UsageEventRecord[] {
+    const list = this.data.usageEvents || [];
+    return list.filter(e => {
+      if (userId && e.user_id !== userId && e.user_id !== 'user_default') return false;
+      if (periodStartIso && new Date(e.created_at) < new Date(periodStartIso)) return false;
+      return true;
+    });
+  }
+
+  countUsage(userId: string, metric: string, periodStartIso?: string): number {
+    const events = this.getUsageEvents(userId, periodStartIso);
+    return events
+      .filter(e => e.metric === metric)
+      .reduce((sum, e) => sum + (e.quantity || 1), 0);
+  }
+
+  // Billing Webhook Idempotency Events
+  recordBillingEvent(event: {
+    provider_event_id: string;
+    type: string;
+    status?: 'processing' | 'processed' | 'failed' | 'ignored';
+    payload?: any;
+    error?: string;
+  }) {
+    this.data.billingEvents = this.data.billingEvents || [];
+    const existingIdx = this.data.billingEvents.findIndex(
+      e => e.provider_event_id === event.provider_event_id
+    );
+    const record = {
+      id: `bev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      status: event.status || 'processed',
+      ...event,
+      processed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    if (existingIdx >= 0) {
+      this.data.billingEvents[existingIdx] = { ...this.data.billingEvents[existingIdx], ...record };
+    } else {
+      this.data.billingEvents.unshift(record);
+    }
+    this.persist();
+    return record;
+  }
+
+  getBillingEvent(providerEventId: string) {
+    this.data.billingEvents = this.data.billingEvents || [];
+    return this.data.billingEvents.find(e => e.provider_event_id === providerEventId);
   }
 
   // Sync state & simulator
@@ -1173,6 +1546,266 @@ export class AppStore {
       .slice(0, 4);
 
     return { bookmarks, collections, topics };
+  }
+
+  // Embeddings Management
+  getEmbedding(savedItemId: string, version?: string): SavedItemEmbeddingRecord | undefined {
+    return this.data.embeddings.find(
+      (e) => e.savedItemId === savedItemId && (!version || e.embeddingVersion === version)
+    );
+  }
+
+  getAllEmbeddings(userId?: string): SavedItemEmbeddingRecord[] {
+    if (!userId) return this.data.embeddings;
+    return this.data.embeddings.filter((e) => e.userId === userId);
+  }
+
+  saveEmbedding(record: SavedItemEmbeddingRecord): void {
+    const existingIdx = this.data.embeddings.findIndex(
+      (e) => e.savedItemId === record.savedItemId && e.embeddingVersion === record.embeddingVersion
+    );
+    if (existingIdx >= 0) {
+      this.data.embeddings[existingIdx] = record;
+    } else {
+      this.data.embeddings.push(record);
+    }
+    this.persist();
+  }
+
+  deleteEmbedding(savedItemId: string): void {
+    this.data.embeddings = this.data.embeddings.filter((e) => e.savedItemId !== savedItemId);
+    this.persist();
+  }
+
+  // Phase 12 Background Job Queue Management
+  getJobQueue(): JobQueueRecord[] {
+    this.data.jobQueue = this.data.jobQueue || [];
+    return this.data.jobQueue;
+  }
+
+  setJobQueue(jobs: JobQueueRecord[]): void {
+    this.data.jobQueue = jobs;
+    this.persist();
+  }
+
+  addJobToQueue(job: JobQueueRecord): JobQueueRecord {
+    this.data.jobQueue = this.data.jobQueue || [];
+    this.data.jobQueue.push(job);
+    this.persist();
+    return job;
+  }
+
+  updateJobInQueue(id: string, updates: Partial<JobQueueRecord>): JobQueueRecord | null {
+    this.data.jobQueue = this.data.jobQueue || [];
+    const job = this.data.jobQueue.find(j => j.id === id);
+    if (job) {
+      Object.assign(job, updates);
+      this.persist();
+      return job;
+    }
+    return null;
+  }
+
+  // Phase 12 Email Deliveries
+  getEmailDeliveries(): EmailDeliveryRecord[] {
+    this.data.emailDeliveries = this.data.emailDeliveries || [];
+    return this.data.emailDeliveries;
+  }
+
+  addEmailDelivery(delivery: EmailDeliveryRecord): EmailDeliveryRecord {
+    this.data.emailDeliveries = this.data.emailDeliveries || [];
+    this.data.emailDeliveries.push(delivery);
+    this.persist();
+    return delivery;
+  }
+
+  updateEmailDelivery(id: string, updates: Partial<EmailDeliveryRecord>): EmailDeliveryRecord | null {
+    this.data.emailDeliveries = this.data.emailDeliveries || [];
+    const delivery = this.data.emailDeliveries.find(d => d.id === id);
+    if (delivery) {
+      Object.assign(delivery, updates);
+      this.persist();
+      return delivery;
+    }
+    return null;
+  }
+
+  // Account Lifecycle & Data Privacy Methods
+  deleteUserData(userId: string): {
+    deletedBookmarks: number;
+    deletedCollections: number;
+    deletedDigests: number;
+    deletedThreads: number;
+  } {
+    const initialBookmarks = this.data.bookmarks.length;
+    const bookmarkIdsToDelete = new Set(
+      this.data.bookmarks
+        .filter(b => b.user_id === userId || (userId === 'user_default' && !b.user_id))
+        .map(b => b.id)
+    );
+
+    // 1. Delete user bookmarks
+    this.data.bookmarks = this.data.bookmarks.filter(
+      b => b.user_id !== userId && (userId !== 'user_default' || Boolean(b.user_id))
+    );
+
+    // 2. Delete user embeddings
+    this.data.embeddings = this.data.embeddings.filter(
+      e => e.userId !== userId && !bookmarkIdsToDelete.has(e.savedItemId)
+    );
+
+    // 3. Delete user collections
+    const initialCollections = this.data.collections.length;
+    this.data.collections = this.data.collections.filter(
+      c => c.user_id !== userId && (userId !== 'user_default' || Boolean(c.user_id))
+    );
+
+    // 4. Delete user digests
+    const initialDigests = this.data.digests.length;
+    this.data.digests = this.data.digests.filter(
+      d => d.user_id !== userId && (userId !== 'user_default' || Boolean(d.user_id))
+    );
+
+    // 5. Delete user chat threads
+    const initialThreads = this.data.chatThreads.length;
+    this.data.chatThreads = this.data.chatThreads.filter(
+      t => t.user_id !== userId && (userId !== 'user_default' || Boolean(t.user_id))
+    );
+
+    // 6. Delete user rediscovery events
+    if (this.data.rediscoveryEvents) {
+      this.data.rediscoveryEvents = this.data.rediscoveryEvents.filter(r => r.user_id !== userId);
+    }
+
+    // 7. Delete user usage events
+    if (this.data.usageEvents) {
+      this.data.usageEvents = this.data.usageEvents.filter(u => u.user_id !== userId);
+    }
+
+    // 8. Delete user background jobs
+    if (this.data.jobQueue) {
+      this.data.jobQueue = this.data.jobQueue.filter(j => j.userId !== userId);
+    }
+
+    // 9. Delete user email deliveries
+    if (this.data.emailDeliveries) {
+      this.data.emailDeliveries = this.data.emailDeliveries.filter(e => e.userId !== userId);
+    }
+
+    // 10. Delete subscription record
+    if (this.data.subscriptions) {
+      delete this.data.subscriptions[userId];
+    }
+    if (userId === 'user_default') {
+      delete (this.data as any).subscription;
+    }
+
+    // 11. Refresh topic counts
+    this.updateTopicCounts();
+    this.persist();
+
+    return {
+      deletedBookmarks: initialBookmarks - this.data.bookmarks.length,
+      deletedCollections: initialCollections - this.data.collections.length,
+      deletedDigests: initialDigests - this.data.digests.length,
+      deletedThreads: initialThreads - this.data.chatThreads.length,
+    };
+  }
+
+  deleteXImportedData(userId: string): { deletedCount: number } {
+    const xBookmarks = this.data.bookmarks.filter(
+      b =>
+        (b.user_id === userId || (!b.user_id && userId === 'user_default')) &&
+        b.source === 'twitter'
+    );
+    const xBookmarkIds = new Set(xBookmarks.map(b => b.id));
+
+    // Remove bookmarks
+    this.data.bookmarks = this.data.bookmarks.filter(b => !xBookmarkIds.has(b.id));
+
+    // Remove corresponding embeddings
+    this.data.embeddings = this.data.embeddings.filter(e => !xBookmarkIds.has(e.savedItemId));
+
+    // Remove from collections
+    for (const col of this.data.collections) {
+      if (col.user_id === userId || col.user_id === 'user_default') {
+        col.bookmark_ids = col.bookmark_ids.filter(id => !xBookmarkIds.has(id));
+      }
+    }
+
+    this.updateTopicCounts();
+    this.persist();
+
+    return { deletedCount: xBookmarks.length };
+  }
+
+  exportUserData(userId: string) {
+    const userBookmarks = this.getBookmarks(userId);
+    const userCollections = this.getCollections(userId).filter(
+      c => c.user_id === userId || c.user_id === 'user_default'
+    );
+    const userDigests = this.getDigests(userId);
+    const userThreads = this.getChatThreads(userId);
+    const userTopics = this.getTopics();
+    const profile = this.getProfile();
+
+    return {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      user: {
+        id: userId,
+        displayName: profile.display_name,
+        email: profile.email,
+        timezone: profile.timezone,
+      },
+      bookmarks: userBookmarks.map(b => ({
+        id: b.id,
+        url: b.url,
+        content: b.content,
+        authorName: b.author_name,
+        authorUsername: b.author_username,
+        aiSummary: b.ai_summary,
+        topics: b.topics,
+        keywords: b.keywords,
+        isFavorite: b.is_favorite,
+        isRead: b.is_read,
+        savedAt: b.bookmark_created_at,
+        importedAt: b.imported_at,
+      })),
+      collections: userCollections.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        description: c.description,
+        visibility: c.visibility,
+        bookmarkCount: c.bookmark_ids.length,
+        createdAt: c.created_at,
+      })),
+      digests: userDigests.map(d => ({
+        id: d.id,
+        title: d.title,
+        summary: d.summary,
+        periodStart: d.period_start,
+        periodEnd: d.period_end,
+        createdAt: d.created_at,
+      })),
+      chatThreads: userThreads.map(t => ({
+        id: t.id,
+        title: t.title,
+        messageCount: t.messages?.length || 0,
+        createdAt: t.created_at,
+      })),
+      topics: userTopics.map(t => ({
+        name: t.name,
+        slug: t.slug,
+        count: t.count,
+      })),
+      settings: {
+        digestFrequency: this.getDigestSettings().frequency,
+        digestDay: this.getDigestSettings().delivery_day,
+        digestTime: this.getDigestSettings().delivery_time,
+      },
+    };
   }
 
   // Clear or reset

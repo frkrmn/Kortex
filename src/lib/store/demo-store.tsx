@@ -9,6 +9,8 @@ import {
   ConnectedAccount,
   Subscription,
   SyncProgressState,
+  RediscoveryCandidateItem,
+  InsightsData,
 } from '../../types';
 import {
   demoUser,
@@ -50,7 +52,9 @@ interface DemoStoreContextType {
   bookmarks: Bookmark[];
   collections: Collection[];
   digests: Digest[];
-  insights: RichInsightsData;
+  insights: RichInsightsData | InsightsData;
+  rediscoveryCandidates: RediscoveryCandidateItem[];
+  isGeneratingDigest: boolean;
   sidebarCollapsed: boolean;
   bookmarkViewMode: 'comfortable' | 'compact';
   toastMessage: string | null;
@@ -73,6 +77,18 @@ interface DemoStoreContextType {
   updateProfile: (updates: Partial<UserProfile>) => void;
   updateDigestSettings: (updates: Partial<DigestSettings>) => void;
   resetData: () => void;
+
+  // Intelligence & Digest Actions
+  refreshDigests: () => Promise<void>;
+  generateNewDigest: (options?: { forceRegenerate?: boolean; period?: string }) => Promise<Digest>;
+  regenerateDigest: (id: string) => Promise<Digest>;
+  refreshInsights: () => Promise<void>;
+  refreshRediscovery: (limit?: number, surface?: string) => Promise<void>;
+  sendRediscoveryFeedback: (
+    bookmarkId: string,
+    interaction: 'useful' | 'not_relevant' | 'hide' | 'click' | 'view',
+    surface?: string
+  ) => Promise<void>;
 
   // X Integration Actions
   refreshXStatus: () => Promise<void>;
@@ -115,6 +131,7 @@ const STORAGE_KEYS = {
   COLLECTIONS: 'recallly_demo_collections_v1',
   PROFILE: 'recallly_demo_profile_v1',
   DIGEST_SETTINGS: 'recallly_demo_digest_settings_v1',
+  DIGESTS: 'recallly_demo_digests_v1',
   VIEW_MODE: 'recallly_view_mode_v1',
   SIDEBAR_COLLAPSED: 'recallly_sidebar_collapsed_v1',
 };
@@ -129,6 +146,19 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return demoBookmarks;
     }
   });
+
+  const [digests, setDigests] = useState<Digest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DIGESTS);
+      return saved ? JSON.parse(saved) : demoDigests;
+    } catch {
+      return demoDigests;
+    }
+  });
+
+  const [insights, setInsights] = useState<RichInsightsData | InsightsData>(demoInsights);
+  const [rediscoveryCandidates, setRediscoveryCandidates] = useState<RediscoveryCandidateItem[]>([]);
+  const [isGeneratingDigest, setIsGeneratingDigest] = useState<boolean>(false);
 
   const [collections, setCollections] = useState<Collection[]>(() => {
     try {
@@ -456,6 +486,14 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [digestSettings]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DIGESTS, JSON.stringify(digests));
+    } catch (e) {
+      console.warn('Could not persist digests to localStorage', e);
+    }
+  }, [digests]);
+
   const setSidebarCollapsed = useCallback((val: boolean) => {
     setSidebarCollapsedState(val);
     try {
@@ -605,15 +643,114 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     showToast('Digest settings saved');
   }, [showToast]);
 
+  // Intelligence & Digest Actions
+  const refreshDigests = useCallback(async () => {
+    try {
+      const list = await api.getDigests(profile.user_id);
+      if (Array.isArray(list) && list.length > 0) {
+        setDigests(list);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh digests:', e);
+    }
+  }, [profile.user_id]);
+
+  const refreshInsights = useCallback(async () => {
+    try {
+      const data = await api.getInsights(profile.user_id);
+      if (data) {
+        setInsights(data as any);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh insights:', e);
+    }
+  }, [profile.user_id]);
+
+  const refreshRediscovery = useCallback(async (limit = 4, surface = 'dashboard') => {
+    try {
+      const candidates = await api.getRediscovery(limit, surface, profile.user_id);
+      if (Array.isArray(candidates)) {
+        setRediscoveryCandidates(candidates);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh rediscovery:', e);
+    }
+  }, [profile.user_id]);
+
+  const generateNewDigest = useCallback(async (options?: { forceRegenerate?: boolean; period?: string }) => {
+    setIsGeneratingDigest(true);
+    try {
+      const newDigest = await api.generateDigest({
+        userId: profile.user_id,
+        forceRegenerate: options?.forceRegenerate,
+        period: options?.period,
+      });
+      setDigests((prev) => {
+        const filtered = prev.filter(d => d.id !== newDigest.id);
+        return [newDigest, ...filtered];
+      });
+      showToast('New intelligence digest generated');
+      return newDigest;
+    } catch (e: any) {
+      showToast(e.message || 'Failed to generate digest');
+      throw e;
+    } finally {
+      setIsGeneratingDigest(false);
+    }
+  }, [profile.user_id, showToast]);
+
+  const regenerateDigest = useCallback(async (id: string) => {
+    setIsGeneratingDigest(true);
+    try {
+      const updated = await api.regenerateDigest(id, profile.user_id);
+      setDigests((prev) => prev.map(d => (d.id === id ? updated : d)));
+      showToast('Digest regenerated with fresh synthesis');
+      return updated;
+    } catch (e: any) {
+      showToast(e.message || 'Failed to regenerate digest');
+      throw e;
+    } finally {
+      setIsGeneratingDigest(false);
+    }
+  }, [profile.user_id, showToast]);
+
+  const sendRediscoveryFeedback = useCallback(async (
+    bookmarkId: string,
+    interaction: 'useful' | 'not_relevant' | 'hide' | 'click' | 'view',
+    surface = 'dashboard'
+  ) => {
+    try {
+      await api.sendRediscoveryFeedback(bookmarkId, interaction, surface, profile.user_id);
+      if (interaction === 'not_relevant' || interaction === 'hide') {
+        setRediscoveryCandidates(prev => prev.filter(c => c.bookmark.id !== bookmarkId));
+        showToast('Feedback noted: surfacing fewer similar items');
+      } else if (interaction === 'useful') {
+        showToast('Marked as useful! We will remember this topic preference');
+      }
+    } catch (e) {
+      console.warn('Failed to submit feedback:', e);
+    }
+  }, [profile.user_id, showToast]);
+
+  // Initial intelligence fetch
+  useEffect(() => {
+    refreshDigests();
+    refreshInsights();
+    refreshRediscovery(4, 'dashboard');
+  }, [refreshDigests, refreshInsights, refreshRediscovery]);
+
   const resetData = useCallback(() => {
     setBookmarks(demoBookmarks);
     setCollections(demoCollections);
     setProfile(demoUser);
     setDigestSettings(demoDigestSettings);
+    setDigests(demoDigests);
+    setInsights(demoInsights);
     localStorage.removeItem(STORAGE_KEYS.BOOKMARKS);
     localStorage.removeItem(STORAGE_KEYS.COLLECTIONS);
     localStorage.removeItem(STORAGE_KEYS.PROFILE);
     localStorage.removeItem(STORAGE_KEYS.DIGEST_SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.DIGESTS);
     showToast('Demo data reset to initial fixtures');
   }, [showToast]);
 
@@ -630,8 +767,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 
   const getDigest = useCallback(
-    (id: string) => demoDigests.find((d) => d.id === id),
-    []
+    (id: string) => digests.find((d) => d.id === id) || demoDigests.find((d) => d.id === id),
+    [digests]
   );
 
   const getRelatedBookmarks = useCallback(
@@ -721,8 +858,10 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       topics,
       bookmarks,
       collections,
-      digests: demoDigests,
-      insights: demoInsights,
+      digests,
+      insights,
+      rediscoveryCandidates,
+      isGeneratingDigest,
       sidebarCollapsed,
       bookmarkViewMode,
       toastMessage,
@@ -741,6 +880,12 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       updateProfile,
       updateDigestSettings,
       resetData,
+      refreshDigests,
+      generateNewDigest,
+      regenerateDigest,
+      refreshInsights,
+      refreshRediscovery,
+      sendRediscoveryFeedback,
       refreshXStatus,
       syncXBookmarks,
       disconnectXAccount,
@@ -763,6 +908,10 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       digestSettings,
       bookmarks,
       collections,
+      digests,
+      insights,
+      rediscoveryCandidates,
+      isGeneratingDigest,
       sidebarCollapsed,
       bookmarkViewMode,
       toastMessage,
@@ -780,6 +929,12 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       updateProfile,
       updateDigestSettings,
       resetData,
+      refreshDigests,
+      generateNewDigest,
+      regenerateDigest,
+      refreshInsights,
+      refreshRediscovery,
+      sendRediscoveryFeedback,
       refreshXStatus,
       syncXBookmarks,
       disconnectXAccount,

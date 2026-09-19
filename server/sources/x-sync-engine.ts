@@ -404,6 +404,17 @@ export class XSyncEngine {
           token: data.access_token,
           xUserId: creds.xUserId,
         };
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 400 || res.status === 401 || errJson.error === 'invalid_grant') {
+          console.error(`[XSyncEngine] Refresh token expired or revoked for user ${userId}. Setting reauthorization_required.`);
+          store.updateConnectedAccount('twitter', {
+            reauthorization_required: true,
+            sync_status: 'error',
+            errorMessage: 'X authorization expired or revoked. Please reconnect your X account.',
+          });
+          return null;
+        }
       }
     } catch (e) {
       console.warn('Token refresh failed, attempting with existing token:', e);
@@ -676,11 +687,19 @@ export class XSyncEngine {
         enrichmentPipeline.enqueueBatch(newNormalized.map(b => b.id));
       }
 
-      // Update sync timestamps
+      // Update sync timestamps and compute next scheduled sync time
+      const sub = store.getSubscription();
+      const isPro = sub?.status === 'active' || sub?.plan === 'pro';
+      const intervalHours = isPro ? 2 : 24;
+      const nextSyncAt = new Date(Date.now() + intervalHours * 60 * 60 * 1000).toISOString();
+
       store.updateConnectedAccount('twitter', {
         last_sync_at: new Date().toISOString(),
         last_successful_sync: new Date().toISOString(),
+        next_sync_at: nextSyncAt,
         sync_status: 'idle',
+        reauthorization_required: false,
+        errorMessage: undefined,
       });
 
       this.progressState = {
@@ -800,11 +819,19 @@ export class XSyncEngine {
       enrichmentPipeline.enqueueBatch(newNormalized.map(b => b.id));
     }
 
+    const sub = store.getSubscription();
+    const isPro = sub?.status === 'active' || sub?.plan === 'pro';
+    const intervalHours = isPro ? 2 : 24;
+    const nextSyncAt = new Date(Date.now() + intervalHours * 60 * 60 * 1000).toISOString();
+
     store.updateConnectedAccount('twitter', {
       connected: true,
       last_sync_at: new Date().toISOString(),
       last_successful_sync: new Date().toISOString(),
+      next_sync_at: nextSyncAt,
       sync_status: 'idle',
+      reauthorization_required: false,
+      errorMessage: undefined,
     });
 
     this.progressState = {

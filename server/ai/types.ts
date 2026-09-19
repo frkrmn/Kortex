@@ -112,6 +112,48 @@ export interface SearchFilters {
   dateFrom?: string;
   dateTo?: string;
   sort?: 'newest' | 'oldest' | 'relevant';
+  collectionId?: string;
+  bookmarkIds?: string[];
+  author?: string;
+}
+
+export interface RAGSourceEvidence {
+  sourceId: string; // e.g. "S1", "S2"
+  bookmarkId: string;
+  authorName: string;
+  authorUsername: string;
+  authorAvatar?: string;
+  createdAt: string;
+  summary: string;
+  excerpt: string;
+  url: string;
+  topics: string[];
+  relevanceScore: number;
+}
+
+export interface RAGMetrics {
+  retrievalLatencyMs: number;
+  generationLatencyMs: number;
+  totalLatencyMs: number;
+  sourcesRetrieved: number;
+  sourcesCited: number;
+  confidence: number;
+  retrievalMode: 'hybrid' | 'lexical' | 'semantic';
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+}
+
+export type RAGSufficiencyStatus = 'sufficient' | 'partial' | 'insufficient';
+
+export interface RAGResponseResult {
+  threadId: string;
+  answer: string;
+  citedSources: RAGSourceEvidence[];
+  allRetrievedSources: RAGSourceEvidence[];
+  sufficiency: RAGSufficiencyStatus;
+  metrics: RAGMetrics;
 }
 
 export interface SearchResultItem {

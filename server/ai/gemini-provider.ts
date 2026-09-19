@@ -495,7 +495,8 @@ ${bookmarksSummary}`;
           contents: cleanInput,
         });
 
-        const values = response.embedding?.values;
+        const anyRes = response as any;
+        const values = anyRes.embedding?.values || anyRes.embeddings?.[0]?.values;
         if (values && values.length > 0) {
           return {
             embedding: values,

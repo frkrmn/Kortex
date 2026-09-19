@@ -1,5 +1,6 @@
 import { store } from '../store';
 import { aiConfig } from '../../src/config/ai';
+import { EntitlementService } from '../billing/entitlement-service';
 import {
   EnrichmentInput,
   EnrichmentResult,
@@ -109,11 +110,22 @@ export class EnrichmentPipeline {
   /**
    * Core worker logic for enriching a single saved item.
    */
-  private async processItem(savedItemId: string): Promise<void> {
+  public async processItem(savedItemId: string): Promise<void> {
     const startTime = Date.now();
     const bookmark = store.getBookmarkById(savedItemId);
     if (!bookmark) {
       console.warn(`[AI Enrichment] Item ${savedItemId} not found during processing.`);
+      return;
+    }
+
+    const userId = bookmark.user_id || 'user_default';
+    const remainingEnrichment = await EntitlementService.getRemainingUsage(userId, 'enrichment');
+    if (remainingEnrichment !== null && remainingEnrichment <= 0) {
+      console.log(`[AI Enrichment] Item ${savedItemId} skipped: Monthly enrichment quota reached for user ${userId}.`);
+      store.updateBookmark(savedItemId, {
+        enrichment_status: 'not_processed',
+        enrichment_error: 'Monthly AI enrichment limit reached. Upgrade to Pro to analyze this bookmark.',
+      });
       return;
     }
 
@@ -238,6 +250,13 @@ export class EnrichmentPipeline {
         store.addAIUsage(usage);
       }
 
+      // Authoritative Entitlement Usage Metering
+      try {
+        EntitlementService.recordUsage(userId, 'enrichment', 1, { savedItemId });
+      } catch (usgErr) {
+        console.warn(`[AI Enrichment] Failed to record usage event for ${savedItemId}:`, usgErr);
+      }
+
       console.log(
         `[AI Enrichment] COMPLETED: Job ${job.id} | Item: ${savedItemId} | Provider: ${enrichmentResult.tokenUsage?.provider || provider.name} | Model: ${enrichmentResult.tokenUsage?.model || aiConfig.enrichmentModel} | Duration: ${durationMs}ms | Tokens: ${enrichmentResult.tokenUsage?.inputTokens || 0}+${enrichmentResult.tokenUsage?.outputTokens || 0}`
       );
@@ -278,6 +297,16 @@ export class EnrichmentPipeline {
     if (!b) return false;
     this.enqueue(savedItemId, true);
     return true;
+  }
+
+  /**
+   * Enriches a specific bookmark on demand or background backfill.
+   */
+  public async enrichBookmark(
+    savedItemId: string,
+    options?: { userId?: string; isDemo?: boolean; forceRefresh?: boolean }
+  ): Promise<void> {
+    this.enqueue(savedItemId, options?.forceRefresh ?? false);
   }
 
   /**

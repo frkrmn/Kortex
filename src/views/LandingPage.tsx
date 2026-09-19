@@ -312,66 +312,123 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 max-w-3xl mx-auto text-center space-y-8">
+      <section id="pricing" className="py-20 px-4 sm:px-6 max-w-5xl mx-auto text-center space-y-8">
         <div className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#8A8A85]">Pricing</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#8A8A85]">Pricing & Plans</span>
           <h2 className="text-3xl font-bold tracking-tight text-[#171717]">
-            Simple, honest pricing.
+            Transparent pricing for serious curators.
           </h2>
-          <p className="text-xs text-[#70706B]">No hidden tiers, no complicated token math.</p>
+          <p className="text-xs text-[#70706B]">No hidden charges. 14-day free trial on Pro. Cancel anytime.</p>
         </div>
 
-        <div className="p-8 rounded-3xl bg-[#FFFFFF] border border-[#E8E8E5] shadow-lg max-w-md mx-auto text-left space-y-6">
-          <div className="flex items-baseline justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-[#171717]">Kortex Pro</h3>
-              <p className="text-xs text-[#70706B]">Everything you need for lifetime research</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto text-left">
+          {/* Free Tier */}
+          <div className="p-8 rounded-3xl bg-[#FFFFFF] border border-[#E8E8E5] space-y-6 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-[#171717]">Free</h3>
+                  <p className="text-xs text-[#70706B]">Essential bookmark organization</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-3xl font-bold text-[#171717]">$0</span>
+                  <span className="text-xs text-[#8A8A85]"> / forever</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs text-[#52524E]">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
+                  <span>Up to 250 saved bookmarks</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
+                  <span>Official X (Twitter) OAuth sync</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
+                  <span>Fast lexical keyword search</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
+                  <span>10 Ask Recallly AI questions / mo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
+                  <span>25 initial AI bookmark enrichments</span>
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-3xl font-bold text-[#171717]">$9</span>
-              <span className="text-xs text-[#8A8A85]"> / month</span>
-            </div>
+
+            <button
+              id="landing-pricing-free-btn"
+              onClick={onStartOnboarding}
+              className="w-full py-3 rounded-xl bg-[#FAFAF8] border border-[#D1D1CB] hover:bg-[#F2F2EE] text-[#171717] text-xs font-semibold transition-all text-center block cursor-pointer"
+            >
+              Get Started Free
+            </button>
           </div>
 
-          <div className="space-y-2.5 text-xs text-[#333330]">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Unlimited X bookmark syncing</span>
+          {/* Pro Tier */}
+          <div className="p-8 rounded-3xl bg-[#FFFFFF] border-2 border-[#171717] shadow-xl space-y-6 flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 px-3 py-1 bg-[#171717] text-white text-[10px] font-bold uppercase tracking-wider rounded-bl-xl">
+              14-Day Free Trial
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>AI automatic tagging & 1-sentence takeaways</span>
+
+            <div className="space-y-4">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-[#171717]">Recallly Pro</h3>
+                  <p className="text-xs text-[#70706B]">Full personal second brain</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-3xl font-bold text-[#171717]">$12</span>
+                  <span className="text-xs text-[#8A8A85]"> / month</span>
+                  <div className="text-[10px] text-emerald-700 font-medium">$99/yr billed annually</div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs text-[#171717]">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-semibold">Unlimited bookmarks archive</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>768-dim hybrid semantic search</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>150 Ask Recallly RAG questions / mo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>300 AI enrichments & summaries / mo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Automated weekly intelligence digests</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Shareable public collections & full JSON export</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Unlimited semantic search queries</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Full Ask AI conversational assistant</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Weekly intelligence email digests</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Public shareable collections & 1-click JSON export</span>
-            </div>
+
+            <button
+              id="landing-pricing-pro-btn"
+              onClick={onStartOnboarding}
+              className="w-full py-3 rounded-xl bg-[#171717] hover:bg-[#333333] text-[#FFFFFF] text-xs font-bold transition-all text-center block shadow-xs cursor-pointer"
+            >
+              Start 14-Day Free Trial
+            </button>
           </div>
-
-          <button
-            id="landing-pricing-btn"
-            onClick={onStartOnboarding}
-            className="w-full py-3 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-[#FAFAF8] text-xs font-semibold transition-all text-center block shadow-xs"
-          >
-            Start 7-day free trial
-          </button>
-
-          <p className="text-[11px] text-center text-[#8A8A85]">
-            No credit card required upfront • Cancel anytime with one click
-          </p>
         </div>
+
+        <p className="text-[11px] text-center text-[#8A8A85]">
+          Powered by Stripe • No commitment • Downgrading never deletes your bookmarks or summaries
+        </p>
       </section>
 
       {/* FAQ Accordion */}

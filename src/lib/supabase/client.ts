@@ -45,3 +45,24 @@ export const getSupabase = (): SupabaseClient<Database> | null => {
 
   return clientInstance;
 };
+
+let adminInstance: SupabaseClient<Database> | null = null;
+
+export const getSupabaseAdmin = (): SupabaseClient<Database> | null => {
+  const serviceRoleKey = procEnv?.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  if (!adminInstance) {
+    adminInstance = createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+
+  return adminInstance;
+};
+

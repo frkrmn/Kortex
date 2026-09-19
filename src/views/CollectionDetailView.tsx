@@ -9,6 +9,7 @@ import {
   Trash2,
   Plus,
   Bookmark as BookmarkIcon,
+  Sparkles,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
@@ -123,6 +124,15 @@ export const CollectionDetailView: React.FC = () => {
 
           {/* Action buttons */}
           <div className="flex items-center gap-2 self-start">
+            <button
+              onClick={() => navigate(`/ask?collection=${collection.id}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EEF4FF] border border-[#DBEAFE] hover:bg-[#DBEAFE] text-xs font-semibold text-[#2563EB] transition-colors cursor-pointer"
+              title="Ask conversational AI questions scoped to this collection"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span>Ask AI</span>
+            </button>
+
             <button
               onClick={handleShare}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E8E8E5] hover:border-[#D0D0CB] text-xs font-medium text-[#171717] transition-colors cursor-pointer"

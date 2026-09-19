@@ -167,10 +167,32 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
           {!sidebarCollapsed && <ChevronRight className="w-3 h-3" />}
         </button>
 
+        {/* Upgrade Callout for Free Tier */}
+        {profile.plan !== 'pro' && !sidebarCollapsed && (
+          <button
+            id="sidebar-upgrade-cta"
+            onClick={() => navigate('/settings?tab=billing')}
+            className="w-full p-2.5 rounded-xl bg-gradient-to-br from-[#EEF4FF] to-[#E0E7FF] border border-[#C7D2FE] text-left hover:border-[#A5B4FC] transition-all cursor-pointer shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#1E3A8A] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+                Upgrade to Pro
+              </span>
+              <span className="text-[9px] font-bold text-[#1D4ED8] bg-white/80 px-1.5 py-0.5 rounded shadow-2xs">
+                14d Trial
+              </span>
+            </div>
+            <p className="text-[10px] text-[#3B82F6] mt-1 leading-tight">
+              Unlimited saves, 768-dim hybrid search & weekly digests.
+            </p>
+          </button>
+        )}
+
         {/* User Card */}
         <div
-          onClick={() => navigate('/settings')}
-          title="Account profile"
+          onClick={() => navigate('/settings?tab=billing')}
+          title="Account profile & billing"
           className={`flex items-center rounded-lg p-1.5 hover:bg-[#F0F0EB] transition-colors cursor-pointer ${
             sidebarCollapsed ? 'justify-center' : 'justify-between'
           }`}
@@ -193,8 +215,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
             )}
           </div>
           {!sidebarCollapsed && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[#EEF4FF] text-[#2563EB] tracking-wider uppercase">
-              Pro
+            <span
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wider uppercase ${
+                profile.plan === 'pro'
+                  ? 'bg-[#EEF4FF] text-[#2563EB]'
+                  : 'bg-[#F4F4F1] text-[#70706B]'
+              }`}
+            >
+              {profile.plan === 'pro' ? 'Pro' : 'Free'}
             </span>
           )}
         </div>

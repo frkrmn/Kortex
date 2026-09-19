@@ -88,13 +88,8 @@ export const OnboardingView: React.FC = () => {
     setImportProgressMessage('Connecting to official X API v2 and reading bookmarks...');
 
     try {
-      // Show progressing stages
-      setTimeout(() => {
-        setImportStage('organizing');
-        setImportProgressMessage('Extracting author metadata and normalizing content...');
-      }, 700);
-
       const result = await api.syncX();
+      if (!result.success) throw new Error(result.error || 'X bookmark import could not complete.');
 
       setImportStage('complete');
       setImportProgressMessage('Bookmarks saved to library.');
@@ -106,9 +101,9 @@ export const OnboardingView: React.FC = () => {
       await refreshXStatus();
     } catch (e: any) {
       console.error('Import error during onboarding:', e);
-      setImportProgressMessage('Import completed with available bookmarks.');
-      setImportStage('complete');
-      setImportedCount(2);
+      setConnectError(e.message || 'Could not import bookmarks from X.');
+      setImportStage('idle');
+      setImportedCount(null);
     } finally {
       setIsImporting(false);
     }
@@ -415,6 +410,10 @@ export const OnboardingView: React.FC = () => {
                         }`}
                       />
                     </div>
+                  </div>
+                ) : connectError ? (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                    X is connected, but bookmarks have not been imported. {connectError}
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-white border border-emerald-200/70 text-xs text-[#171717] flex items-center gap-2">

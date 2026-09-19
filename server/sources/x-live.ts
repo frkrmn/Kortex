@@ -7,6 +7,7 @@ import { mapSavedItemRowToBookmark } from '../../src/lib/repositories/supabase/m
 const COOKIE = 'kortex_x_oauth_bind';
 const CALLBACK_PATH = '/api/integrations/x/callback';
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+class XBookmarkPaymentRequiredError extends Error {}
 
 function config() {
   const appUrl = process.env.APP_URL;
@@ -161,11 +162,11 @@ export async function syncLiveX(userId: string) {
     .eq('user_id', userId).eq('provider', 'twitter').maybeSingle();
   if (error) throw error;
   if (!account || !account.access_token_encrypted || !account.provider_user_id) {
-    return { success: false, addedCount: 0, discoveredCount: 0, items: [], error: 'X account is not connected.' };
+    return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'X account is not connected.' };
   }
   let accessToken = decryptToken(account.access_token_encrypted);
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() < Date.now() + 120000) {
-    if (!account.refresh_token_encrypted) return { success: false, addedCount: 0, discoveredCount: 0, items: [], error: 'Reconnect X to continue syncing.' };
+    if (!account.refresh_token_encrypted) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
     const settings = config()!;
     const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: decryptToken(account.refresh_token_encrypted), client_id: settings.clientId });
     const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
@@ -173,7 +174,7 @@ export async function syncLiveX(userId: string) {
     const response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers, body: body.toString() });
     if (!response.ok) {
       await db.from('connected_accounts').update({ sync_status: 'error' }).eq('id', account.id);
-      return { success: false, addedCount: 0, discoveredCount: 0, items: [], error: 'Reconnect X to continue syncing.' };
+      return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
     }
     const tokens = await response.json();
     if (typeof tokens.access_token !== 'string') throw new Error('X refresh did not return an access token.');
@@ -194,7 +195,7 @@ export async function syncLiveX(userId: string) {
     .eq('id', account.id).eq('user_id', userId)
     .or(`last_sync_at.is.null,last_sync_at.lt.${cutoff}`).select('id').maybeSingle();
   if (lockError) throw lockError;
-  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, items: [], error: 'Please wait a minute before syncing again.' };
+  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429, error: 'Please wait a minute before syncing again.' };
 
   const { data: job, error: jobError } = await db.from('sync_jobs').insert({ user_id: userId, provider: 'twitter',
     connected_account_id: account.id, status: 'running', started_at: new Date().toISOString() }).select().single();
@@ -209,6 +210,9 @@ export async function syncLiveX(userId: string) {
     url.searchParams.set('tweet.fields', 'created_at,note_tweet');
     url.searchParams.set('user.fields', 'name,username,profile_image_url');
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (response.status === 402) {
+      throw new XBookmarkPaymentRequiredError('X API returned 402 Payment Required. Check your X Developer Console credit balance and spending limit before retrying.');
+    }
     if (!response.ok) throw new Error(`X bookmarks request failed (${response.status}).`);
     const payload = await response.json();
     const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string; note_tweet?: { text?: string } }> = payload.data || [];
@@ -243,10 +247,12 @@ export async function syncLiveX(userId: string) {
     return { success: true, addedCount: saved?.length || 0, discoveredCount: tweets.length,
       items: (saved || []).map(row => mapSavedItemRowToBookmark(row)) };
   } catch (syncError) {
+    const paymentRequired = syncError instanceof XBookmarkPaymentRequiredError;
     await Promise.all([
-      db.from('sync_jobs').update({ status: 'failed', error_message: 'X sync failed.', completed_at: new Date().toISOString() }).eq('id', job.id),
+      db.from('sync_jobs').update({ status: 'failed', error_message: paymentRequired ? 'X API returned HTTP 402 Payment Required.' : 'X sync failed.', completed_at: new Date().toISOString() }).eq('id', job.id),
       db.from('connected_accounts').update({ sync_status: 'error' }).eq('id', account.id),
     ]);
+    if (paymentRequired) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 402, error: (syncError as Error).message };
     throw syncError;
   }
 }

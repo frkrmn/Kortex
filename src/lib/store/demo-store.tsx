@@ -281,6 +281,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     try {
       const result = await api.syncX();
+      if (!result.success) throw new Error(result.error || 'X sync could not complete.');
       if (result.success && result.items && result.items.length > 0) {
         addImportedBookmarks(result.items);
       }

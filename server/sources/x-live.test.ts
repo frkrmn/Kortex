@@ -34,6 +34,7 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
   let stateRow: Record<string, any> | null = null;
   let savedAccount: Record<string, any> | null = null;
   let savedBookmark: Record<string, any> | null = null;
+  let bookmarksStatus = 200;
   globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input.toString());
     if (url.pathname === '/rest/v1/x_oauth_states' && init?.method === 'POST') {
@@ -74,6 +75,7 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     if (url.pathname === '/rest/v1/sync_jobs' && init?.method === 'PATCH') return new Response(null, { status: 204 });
     if (url.pathname === '/2/users/x-user-1/bookmarks') {
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer private-access-token');
+      if (bookmarksStatus === 402) return Response.json({ title: 'Payment Required' }, { status: 402 });
       return Response.json({ data: [{ id: 'tweet-1', text: 'Private bookmark', author_id: 'x-user-1' }],
         includes: { users: [{ id: 'x-user-1', username: 'owner', name: 'Owner' }] } });
     }
@@ -125,6 +127,12 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(sync.addedCount, 1);
     assert.equal(savedBookmark?.user_id, 'user-a');
     assert.equal(sync.items[0].user_id, 'user-a');
+
+    bookmarksStatus = 402;
+    const paymentRequired = await syncLiveX('user-a');
+    assert.equal(paymentRequired.success, false);
+    assert.equal(paymentRequired.statusCode, 402);
+    assert.match(paymentRequired.error, /X Developer Console credit balance/);
 
     const disconnected = await disconnectLiveX('user-a');
     assert.equal(disconnected.success, true);

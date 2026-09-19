@@ -42,7 +42,8 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if ((route === '/integrations/x/sync' || route === '/sources/x/sync') && method === 'POST') {
-      res.json(await syncLiveX(user.id));
+      const result = await syncLiveX(user.id);
+      res.status(result.success ? 200 : ('statusCode' in result ? result.statusCode : 409)).json(result);
       return;
     }
     if (route === '/user/profile' && method === 'GET') {

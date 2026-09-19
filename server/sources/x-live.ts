@@ -57,9 +57,14 @@ function jsonForScript(value: unknown) {
 function callbackPage(res: Response, payload: Record<string, unknown>, origin: string, status = 200) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  // Helmet's default same-origin policy can sever the popup's opener after
+  // navigation through x.com. The callback must be able to notify its opener.
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.status(status).type('html').send(`<!doctype html><html><head><meta name="referrer" content="no-referrer"><title>Kortex X connection</title></head><body><p>You may close this window.</p><script>
     history.replaceState(null, '', '/settings');
-    if (window.opener) window.opener.postMessage(${jsonForScript(payload)}, ${jsonForScript(origin)});
+    const result = ${jsonForScript(payload)};
+    if (window.opener) window.opener.postMessage(result, ${jsonForScript(origin)});
+    else try { localStorage.setItem('kortex_x_oauth_result', JSON.stringify(result)); } catch {}
     window.close();
   </script></body></html>`);
 }

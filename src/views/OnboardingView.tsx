@@ -47,11 +47,11 @@ export const OnboardingView: React.FC = () => {
 
   // Listen to OAuth popup messages
   useEffect(() => {
-    const handleOAuthMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'X_AUTH_SUCCESS') {
+    const handleResult = async (data: any) => {
+      if (!isConnecting) return;
+      if (data?.type === 'X_AUTH_SUCCESS') {
         setIsConnecting(false);
-        const userData = event.data.data;
+        const userData = data.data;
         setConnectedXUser({
           username: userData.username,
           displayName: userData.displayName || userData.username,
@@ -60,15 +60,27 @@ export const OnboardingView: React.FC = () => {
         await refreshXStatus();
         // Immediately initiate initial bookmark import
         triggerInitialBookmarkImport();
-      } else if (event.data?.type === 'X_AUTH_ERROR') {
+      } else if (data?.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
-        setConnectError(event.data.error || 'X authorization was rejected or cancelled.');
+        setConnectError(data.error || 'X authorization was rejected or cancelled.');
       }
+    };
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin) void handleResult(event.data);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'kortex_x_oauth_result' || !event.newValue) return;
+      try { void handleResult(JSON.parse(event.newValue)); } catch { /* Ignore malformed data. */ }
+      localStorage.removeItem('kortex_x_oauth_result');
     };
 
     window.addEventListener('message', handleOAuthMessage);
-    return () => window.removeEventListener('message', handleOAuthMessage);
-  }, [refreshXStatus]);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [isConnecting, refreshXStatus]);
 
   const triggerInitialBookmarkImport = async () => {
     setIsImporting(true);

@@ -82,24 +82,36 @@ export const SettingsView: React.FC = () => {
 
   // Listen for OAuth messages from popup
   useEffect(() => {
-    const handleOAuthMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'X_AUTH_SUCCESS') {
+    const handleResult = async (data: any) => {
+      if (!isConnecting) return;
+      if (data?.type === 'X_AUTH_SUCCESS') {
         setIsConnecting(false);
-        showToast(`Connected as @${event.data.data.username}`);
+        showToast(`Connected as @${data.data.username}`);
         await refreshXStatus();
         // Trigger sync right after connect
         syncXBookmarks();
-      } else if (event.data?.type === 'X_AUTH_ERROR') {
+      } else if (data?.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
-        setConnectError(event.data.error || 'Authorization failed.');
+        setConnectError(data.error || 'Authorization failed.');
         showToast('X connection was rejected or cancelled.');
       }
     };
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin) void handleResult(event.data);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'kortex_x_oauth_result' || !event.newValue) return;
+      try { void handleResult(JSON.parse(event.newValue)); } catch { /* Ignore malformed data. */ }
+      localStorage.removeItem('kortex_x_oauth_result');
+    };
 
     window.addEventListener('message', handleOAuthMessage);
-    return () => window.removeEventListener('message', handleOAuthMessage);
-  }, [refreshXStatus, showToast, syncXBookmarks]);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [isConnecting, refreshXStatus, showToast, syncXBookmarks]);
 
   const handleConnectX = async () => {
     setConnectError(null);

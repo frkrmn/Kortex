@@ -6,12 +6,12 @@ import { beginLiveXOAuth, finishLiveXOAuth, syncLiveX, disconnectLiveX } from '.
 import { decryptToken } from '../crypto';
 
 function fakeResponse() {
-  const result: { status: number; body: any; cookies: Record<string, string>; cleared: string[] } =
-    { status: 200, body: null, cookies: {}, cleared: [] };
+  const result: { status: number; body: any; cookies: Record<string, string>; cleared: string[]; headers: Record<string, string> } =
+    { status: 200, body: null, cookies: {}, cleared: [], headers: {} };
   const res = {
     status(code: number) { result.status = code; return this; },
     type() { return this; },
-    setHeader() { return this; },
+    setHeader(name: string, value: string) { result.headers[name.toLowerCase()] = value; return this; },
     json(body: unknown) { result.body = body; return this; },
     send(body: unknown) { result.body = body; return this; },
     cookie(name: string, value: string) { result.cookies[name] = value; return this; },
@@ -114,6 +114,8 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     await finishLiveXOAuth(callbackRequest(state, binding), success.res);
     assert.equal(success.result.status, 200);
     assert.match(success.result.body, /X_AUTH_SUCCESS/);
+    assert.equal(success.result.headers['cross-origin-opener-policy'], 'unsafe-none');
+    assert.match(success.result.body, /kortex_x_oauth_result/);
     assert.equal(savedAccount?.user_id, 'user-a');
     assert.equal(decryptToken(savedAccount!.access_token_encrypted), 'private-access-token');
     assert.equal(success.result.body.includes('private-access-token'), false);

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { mapSavedItemRowToBookmark, mapCollectionRowToCollection, mapProfileRowToProfile, mapConnectedAccountSafeToAccount, mapDigestRowToDigest, mapDigestSettingsRowToSettings, mapTopicRowToTopic } from '../src/lib/repositories/supabase/mappers';
+import { PLANS } from '../src/config/plans';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -51,6 +52,29 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       const { data, error } = await db.from('connected_accounts_safe').select('*').eq('user_id', user.id);
       if (error) throw error;
       res.json(data.map(row => mapConnectedAccountSafeToAccount(row)));
+      return;
+    }
+    if (route === '/integrations/x/status' && method === 'GET') {
+      const { data, error } = await db.from('connected_accounts_safe').select('*').eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
+      if (error) throw error;
+      const account = data ? mapConnectedAccountSafeToAccount(data) : null;
+      res.json({
+        connected: Boolean(account?.connected), username: account?.username || '',
+        displayName: account?.displayName || '', avatarUrl: account?.avatarUrl || '',
+        last_sync_at: account?.last_sync_at, last_successful_sync: account?.last_successful_sync,
+        sync_status: account?.sync_status || 'idle', configured: Boolean(process.env.X_CLIENT_ID),
+        redirectUri: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/integrations/x/callback` : null,
+      });
+      return;
+    }
+    if ((route === '/integrations/x/sync-status' || route === '/sources/x/sync-status') && method === 'GET') {
+      const { data, error } = await db.from('sync_jobs').select('*').eq('user_id', user.id).eq('provider', 'twitter')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
+      res.json({ isSyncing: data?.status === 'running' || data?.status === 'processing',
+        stage: data?.status === 'completed' ? 'complete' : data?.status === 'running' ? 'fetching' : 'idle',
+        processedCount: data?.items_processed || 0, totalCount: data?.items_discovered || 0,
+        message: data?.error_message || data?.status || 'Idle' });
       return;
     }
     if (route === '/topics' && method === 'GET') {
@@ -104,10 +128,42 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       res.json(mapDigestSettingsRowToSettings(data));
       return;
     }
-    if (route === '/subscription' && method === 'GET') {
+    if ((route === '/subscription' || route === '/billing/subscription') && method === 'GET') {
       const { data, error } = await db.from('subscriptions').select('user_id, provider, plan, status, current_period_start, current_period_end, cancel_at_period_end').eq('user_id', user.id).maybeSingle();
       if (error) throw error;
-      res.json(data || { user_id: user.id, plan: 'free', status: 'active' });
+      res.json(data || { user_id: user.id, provider: 'stripe', plan: 'free', status: 'active', current_period_end: new Date(0).toISOString() });
+      return;
+    }
+    if (route === '/billing/config' && method === 'GET') {
+      res.json({ plans: PLANS, defaultTrialDays: 7, isStripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY) });
+      return;
+    }
+    if (route === '/billing/entitlements' && method === 'GET') {
+      const [subscription, bookmarks, accounts, usage] = await Promise.all([
+        db.from('subscriptions').select('plan, status, current_period_start, current_period_end, cancel_at_period_end').eq('user_id', user.id).maybeSingle(),
+        db.from('saved_items').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        db.from('connected_accounts_safe').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        db.from('usage_events').select('metric, quantity').eq('user_id', user.id).gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      ]);
+      if (subscription.error || bookmarks.error || accounts.error || usage.error) throw subscription.error || bookmarks.error || accounts.error || usage.error;
+      const sub = subscription.data;
+      const periodValid = Boolean(sub?.current_period_end && new Date(sub.current_period_end).getTime() > Date.now());
+      const isPro = sub?.plan === 'pro' && (sub.status === 'active' || sub.status === 'past_due' || (sub.status === 'trialing' && periodValid));
+      const plan = isPro ? 'pro' : 'free';
+      const config = PLANS[plan];
+      const askCount = (usage.data || []).filter(item => item.metric === 'ask').reduce((sum, item) => sum + item.quantity, 0);
+      const enrichmentCount = (usage.data || []).filter(item => item.metric === 'enrichment').reduce((sum, item) => sum + item.quantity, 0);
+      const bookmarkCount = bookmarks.count || 0;
+      res.json({ plan, status: sub?.status || 'active', isPro, interval: 'monthly',
+        limits: { bookmarks: config.limits.bookmarkLimit, monthlyAsk: config.limits.monthlyAskLimit,
+          monthlyEnrichment: config.limits.monthlyEnrichmentLimit, syncAccounts: config.limits.syncAccountLimit },
+        usage: { bookmarksCount: bookmarkCount, monthlyAskCount: askCount, monthlyEnrichmentCount: enrichmentCount,
+          connectedAccountsCount: accounts.count || 0 },
+        remaining: { bookmarks: config.limits.bookmarkLimit === null ? null : Math.max(0, config.limits.bookmarkLimit - bookmarkCount),
+          monthlyAsk: config.limits.monthlyAskLimit === null ? null : Math.max(0, config.limits.monthlyAskLimit - askCount),
+          monthlyEnrichment: config.limits.monthlyEnrichmentLimit === null ? null : Math.max(0, config.limits.monthlyEnrichmentLimit - enrichmentCount) },
+        features: config.features, currentPeriodStart: sub?.current_period_start, currentPeriodEnd: sub?.current_period_end,
+        cancelAtPeriodEnd: sub?.cancel_at_period_end });
       return;
     }
 
@@ -305,6 +361,52 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         topics: (topicsResult.data || []).map(row => mapTopicRowToTopic(row))
           .filter(item => item.name.toLowerCase().includes(term)).slice(0, 4),
       });
+      return;
+    }
+
+    if (route === '/ai/usage' && method === 'GET') {
+      const { data, error } = await db.from('ai_usage').select('*').eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(50);
+      if (error) throw error;
+      const input = data.reduce((sum, row) => sum + row.input_tokens, 0);
+      const output = data.reduce((sum, row) => sum + row.output_tokens, 0);
+      res.json({ summary: { totalOperations: data.length, totalInputTokens: input, totalOutputTokens: output,
+        totalTokens: input + output, totalCostUSD: Number(data.reduce((sum, row) => sum + Number(row.estimated_cost || 0), 0).toFixed(5)) }, records: data });
+      return;
+    }
+    if (route === '/ai/enrichment-status' && method === 'GET') {
+      const { data, error } = await db.from('processing_jobs').select('*').eq('user_id', user.id).eq('job_type', 'enrichment')
+        .order('created_at', { ascending: false }).limit(100);
+      if (error) throw error;
+      const count = (status: string) => data.filter(job => job.status === status).length;
+      res.json({ isProcessing: count('running') + count('processing') > 0, activeCount: count('running') + count('processing'),
+        pendingCount: count('pending'), completedCount: count('completed'), failedCount: count('failed'),
+        provider: 'server', model: 'configured', version: 'v1', recentJobs: data.slice(0, 10) });
+      return;
+    }
+    if (route === '/embeddings/status' && method === 'GET') {
+      const [bookmarks, embeddings, jobs] = await Promise.all([
+        db.from('saved_items').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        db.from('saved_item_embeddings').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        db.from('processing_jobs').select('status').eq('user_id', user.id).eq('job_type', 'embedding'),
+      ]);
+      if (bookmarks.error || embeddings.error || jobs.error) throw bookmarks.error || embeddings.error || jobs.error;
+      res.json({ totalBookmarks: bookmarks.count || 0, embeddedCount: embeddings.count || 0,
+        pendingJobs: (jobs.data || []).filter(job => job.status === 'pending').length,
+        processingJobs: (jobs.data || []).filter(job => job.status === 'processing' || job.status === 'running').length,
+        failedJobs: (jobs.data || []).filter(job => job.status === 'failed').length });
+      return;
+    }
+    if (route === '/background/status' && method === 'GET') {
+      const [jobs, deliveries] = await Promise.all([
+        db.from('job_queue').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        db.from('email_deliveries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
+      ]);
+      if (jobs.error || deliveries.error) throw jobs.error || deliveries.error;
+      const count = (statuses: string[]) => jobs.data.filter(job => statuses.includes(job.status)).length;
+      res.json({ metrics: { pendingJobs: count(['pending', 'retry_scheduled']), runningJobs: count(['running']),
+        completedJobs: count(['completed']), failedJobs: count(['failed', 'dead']), activeWorkers: 0 },
+        recentJobs: jobs.data.slice(0, 20), recentDeliveries: deliveries.data });
       return;
     }
 

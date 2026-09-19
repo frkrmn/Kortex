@@ -638,7 +638,20 @@ export const api = {
 
   // Data & Reset
   async exportData(): Promise<void> {
-    window.location.href = '/api/data/export';
+    const res = await apiFetch('/api/data/export', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to export data');
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'kortex-data-export.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      URL.revokeObjectURL(downloadUrl);
+    }
   },
 
   async resetData(): Promise<void> {

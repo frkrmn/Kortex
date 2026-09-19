@@ -67,6 +67,18 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       return Response.json({ id, user_id: owner, name: 'Owned', slug: 'owned', description: '', visibility: 'private', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
     }
     if (url.pathname === '/rest/v1/collection_items') return Response.json([]);
+    if (url.pathname === '/rest/v1/connected_accounts_safe') {
+      const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
+      assert.equal(owner, token);
+      return Response.json({ id: `${owner}-account`, user_id: owner, provider: 'twitter', username: owner,
+        provider_user_id: owner, sync_status: 'idle', last_sync_at: null, last_successful_sync_at: null,
+        metadata: {}, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
+    }
+    if (url.pathname === '/rest/v1/ai_usage') {
+      const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
+      assert.equal(owner, token);
+      return Response.json([{ id: `${owner}-usage`, user_id: owner, input_tokens: 2, output_tokens: 3, estimated_cost: 0.01 }]);
+    }
     if (url.pathname === '/rest/v1/rpc/clear_my_library') {
       clearTokens.push(token || '');
       return new Response(null, { status: 204 });
@@ -101,6 +113,14 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     await liveApi(request('/data/clear', 'user-b', 'POST'), clear.res);
     assert.equal(clear.result.code, 200);
     assert.deepEqual(clearTokens, ['user-b']);
+
+    const xStatus = response();
+    await liveApi(request('/integrations/x/status', 'user-a'), xStatus.res);
+    assert.equal((xStatus.result.body as { username: string }).username, 'user-a');
+
+    const usage = response();
+    await liveApi(request('/ai/usage', 'user-b'), usage.res);
+    assert.equal((usage.result.body as { records: Array<{ user_id: string }> }).records[0].user_id, 'user-b');
   } finally {
     globalThis.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.VITE_SUPABASE_URL; else process.env.VITE_SUPABASE_URL = previousUrl;

@@ -29,11 +29,13 @@ test('live API requires a verified session and scopes bookmark lookup to its own
   const previousFetch = globalThis.fetch;
   const previousUrl = process.env.VITE_SUPABASE_URL;
   const previousKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const previousServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const previousDemo = process.env.VITE_DEMO_MODE;
   const queries: string[] = [];
   const clearTokens: string[] = [];
   process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:39999';
   process.env.VITE_SUPABASE_ANON_KEY = 'test-anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
   process.env.VITE_DEMO_MODE = 'false';
   globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input.toString());
@@ -73,6 +75,11 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       return Response.json({ id: `${owner}-account`, user_id: owner, provider: 'twitter', username: owner,
         provider_user_id: owner, sync_status: 'idle', last_sync_at: null, last_successful_sync_at: null,
         metadata: {}, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
+    }
+    if (url.pathname === '/rest/v1/connected_accounts') {
+      assert.equal(token, 'test-service-key');
+      assert.equal(url.searchParams.get('user_id'), 'eq.user-a');
+      return Response.json({ sync_cursor: null });
     }
     if (url.pathname === '/rest/v1/ai_usage') {
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
@@ -125,6 +132,7 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     globalThis.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.VITE_SUPABASE_URL; else process.env.VITE_SUPABASE_URL = previousUrl;
     if (previousKey === undefined) delete process.env.VITE_SUPABASE_ANON_KEY; else process.env.VITE_SUPABASE_ANON_KEY = previousKey;
+    if (previousServiceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = previousServiceKey;
     if (previousDemo === undefined) delete process.env.VITE_DEMO_MODE; else process.env.VITE_DEMO_MODE = previousDemo;
   }
 });

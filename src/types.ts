@@ -33,6 +33,7 @@ export interface Bookmark {
   language?: string;
   enriched_at?: string;
   enrichment_version?: string;
+  enrichment_model?: string;
   engagement?: {
     likes?: number;
     retweets?: number;
@@ -66,6 +67,7 @@ export interface DigestTopicGroup {
   topic: string;
   summary: string;
   bookmark_ids: string[];
+  count?: number;
 }
 
 export interface DigestKeyIdea {
@@ -81,6 +83,11 @@ export interface DigestConnection {
   explanation: string;
   source_ids: string[];
   bookmark_count: number;
+  id?: string;
+  sourceTopic?: string;
+  targetTopic?: string;
+  bookmarkCount?: number;
+  connectionSummary?: string;
 }
 
 export interface DigestItemReference {
@@ -107,6 +114,9 @@ export interface DigestRevisitItem {
   topics: string[];
   reason: string;
   url: string;
+  bookmark_id?: string;
+  snippet?: string;
+  days_ago?: number;
 }
 
 export interface DigestMetrics {
@@ -159,6 +169,8 @@ export interface Digest {
   keyIdeas?: string[];
   standoutBookmarkIds?: string[];
   actionableTakeaways?: string[];
+  standout_bookmark_ids?: string[];
+  takeaways?: string[];
 }
 
 export interface DigestSettings {
@@ -199,6 +211,7 @@ export interface ChatMessage {
   id: string;
   thread_id: string;
   role: 'user' | 'assistant';
+  sender?: 'user' | 'assistant';
   content: string;
   sources?: ChatSourceCitation[];
   metrics?: ChatMessageMetrics;

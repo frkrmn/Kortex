@@ -9,6 +9,9 @@ import { xSyncEngine } from './server/sources/x-sync-engine';
 import { enrichmentPipeline } from './server/ai/enrichment-pipeline';
 import { liveApi } from './server/live-api';
 import { finishLiveXOAuth } from './server/sources/x-live';
+import { LiveStripeService } from './server/economics/live-stripe';
+import { SmartSyncService } from './server/economics/smart-sync';
+import { ProviderBudgetService } from './server/economics/provider-budget';
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -26,6 +29,7 @@ async function startServer() {
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: APP_ORIGIN, credentials: true }));
+  app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: '100kb' }));
   app.use(express.json({ limit: '100kb' }));
 
   const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
@@ -40,7 +44,36 @@ async function startServer() {
   // for local development until its handlers use authenticated tenant storage.
   app.use('/api/', (req, res, next) => {
     if (req.path === '/health') return next();
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' || process.env.VITE_DEMO_MODE === 'false') {
+      if (req.path.replace(/\/$/, '') === '/internal/smart-sync' && req.method === 'GET') {
+        if (!process.env.CRON_SECRET || req.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+          res.status(401).json({ error: 'Unauthorized.' }); return;
+        }
+        void SmartSyncService.run().then(result => res.json(result)).catch(error => {
+          console.error('Smart Sync failure:', error);
+          if (!res.headersSent) res.status(500).json({ error: 'Smart Sync failed.' });
+        });
+        return;
+      }
+      if (req.path.replace(/\/$/, '') === '/internal/provider-metrics' && req.method === 'GET') {
+        if (!process.env.CRON_SECRET || req.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+          res.status(401).json({ error: 'Unauthorized.' }); return;
+        }
+        void ProviderBudgetService.getInternalMetrics().then(result => res.json(result)).catch(error => {
+          console.error('Provider metrics failure:', error);
+          if (!res.headersSent) res.status(500).json({ error: 'Metrics unavailable.' });
+        });
+        return;
+      }
+      if (req.path.replace(/\/$/, '') === '/billing/webhook' && req.method === 'POST') {
+        const signature = req.get('stripe-signature');
+        if (!signature || !Buffer.isBuffer(req.body)) { res.status(400).json({ error: 'Invalid webhook.' }); return; }
+        void LiveStripeService.webhook(req.body, signature).then(result => res.json(result)).catch(error => {
+          console.error('Stripe webhook failure:', error);
+          if (!res.headersSent) res.status(400).json({ error: 'Webhook rejected.' });
+        });
+        return;
+      }
       if (req.path.replace(/\/$/, '') === '/integrations/x/callback') {
         void finishLiveXOAuth(req, res).catch(error => {
           console.error('X callback failure:', error);

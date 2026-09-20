@@ -37,6 +37,9 @@ export interface XStatusState {
   sync_status: 'idle' | 'syncing' | 'error';
   configured: boolean;
   redirectUri?: string;
+  reauthorization_required?: boolean;
+  next_sync_at?: string;
+  hasPendingImport?: boolean;
 }
 
 interface DemoStoreContextType {

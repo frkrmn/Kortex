@@ -41,6 +41,9 @@ export const OnboardingView: React.FC = () => {
   const [importProgressMessage, setImportProgressMessage] = useState('');
   const [importStage, setImportStage] = useState<'fetching' | 'organizing' | 'indexing' | 'complete' | 'idle'>('idle');
   const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [availableImports, setAvailableImports] = useState<number | null>(null);
+  const [hasMoreImport, setHasMoreImport] = useState(false);
+  const [customImportLimit, setCustomImportLimit] = useState('');
   const [isFinishing, setIsFinishing] = useState(false);
 
   const callbackUrl = `${window.location.origin}/api/integrations/x/callback`;
@@ -58,8 +61,7 @@ export const OnboardingView: React.FC = () => {
           avatarUrl: userData.avatarUrl,
         });
         await refreshXStatus();
-        // Immediately initiate initial bookmark import
-        triggerInitialBookmarkImport();
+        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       } else if (data?.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
         setConnectError(data.error || 'X authorization was rejected or cancelled.');
@@ -82,23 +84,25 @@ export const OnboardingView: React.FC = () => {
     };
   }, [isConnecting, refreshXStatus]);
 
-  const triggerInitialBookmarkImport = async () => {
+  const triggerInitialBookmarkImport = async (limit = 100, continueImport = false) => {
     setIsImporting(true);
     setImportStage('fetching');
     setImportProgressMessage('Connecting to official X API v2 and reading bookmarks...');
 
     try {
-      const result = await api.syncX();
+      const result = await api.syncX({ limit, historical: true, continueImport });
       if (!result.success) throw new Error(result.error || 'X bookmark import could not complete.');
 
       setImportStage('complete');
       setImportProgressMessage('Bookmarks saved to library.');
       setImportedCount(result.addedCount);
+      setHasMoreImport(Boolean(result.hasMore));
 
       if (result.items && result.items.length > 0) {
         addImportedBookmarks(result.items);
       }
       await refreshXStatus();
+      void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
     } catch (e: any) {
       console.error('Import error during onboarding:', e);
       setConnectError(e.message || 'Could not import bookmarks from X.');
@@ -156,7 +160,7 @@ export const OnboardingView: React.FC = () => {
           avatarUrl: testRes.account.avatarUrl,
         });
         await refreshXStatus();
-        triggerInitialBookmarkImport();
+        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       }
     } catch (e: any) {
       setConnectError('Could not connect test account.');
@@ -391,6 +395,34 @@ export const OnboardingView: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="p-3 rounded-xl bg-white border border-emerald-200 text-xs text-[#171717] space-y-2">
+                  <p>{availableImports === null ? 'Loading available imports…' : `${availableImports.toLocaleString()} imports remaining.`}</p>
+                  <p className="text-[#70706B]">An Import Credit is used only when a new bookmark is added. Known bookmarks use none.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[100, 500, 1000].filter(limit => availableImports !== null && availableImports >= limit).map(limit => (
+                      <button key={limit} type="button" disabled={isImporting} onClick={() => void triggerInitialBookmarkImport(limit)}
+                        className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-50">Import up to {limit.toLocaleString()}</button>
+                    ))}
+                    {availableImports !== null && availableImports > 0 && availableImports < 100 && (
+                      <button type="button" disabled={isImporting} onClick={() => void triggerInitialBookmarkImport(availableImports)}
+                        className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-50">Import up to {availableImports}</button>
+                    )}
+                    {hasMoreImport && availableImports !== null && availableImports > 0 && (
+                      <button type="button" disabled={isImporting} onClick={() => void triggerInitialBookmarkImport(availableImports, true)}
+                        className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-50">Continue import</button>
+                    )}
+                  </div>
+                  {availableImports !== null && availableImports > 0 && <div className="flex flex-wrap items-center gap-2">
+                    <input type="number" min="1" max={availableImports} value={customImportLimit}
+                      onChange={event => setCustomImportLimit(event.target.value)} placeholder="Custom amount"
+                      className="w-36 rounded-lg border px-3 py-2" />
+                    <button type="button" disabled={isImporting || !Number.isSafeInteger(Number(customImportLimit)) || Number(customImportLimit) < 1 || Number(customImportLimit) > availableImports}
+                      onClick={() => void triggerInitialBookmarkImport(Number(customImportLimit))}
+                      className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-50">Import custom amount</button>
+                  </div>}
+                  {availableImports === 0 && <p className="text-amber-700">You've used your available imports. Continue to Settings → Billing to add Import Credits or wait for an included allowance.</p>}
+                </div>
+
                 {/* Import progress bar / feedback */}
                 {isImporting ? (
                   <div className="p-3.5 rounded-xl bg-white border border-emerald-200/80 space-y-2">
@@ -421,7 +453,7 @@ export const OnboardingView: React.FC = () => {
                     <span>
                       {importedCount !== null && importedCount > 0
                         ? `Imported ${importedCount} bookmarks into your library.`
-                        : 'Bookmarks synchronized and ready in your library.'}
+                        : 'Choose how many bookmarks to import.'}
                     </span>
                   </div>
                 )}

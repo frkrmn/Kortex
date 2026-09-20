@@ -1,7 +1,7 @@
 /**
  * Recallly Upgrade Modal
  * Presentation and checkout launcher for Free -> Pro tier transition.
- * Supports Monthly and Yearly billing intervals, 14-day trial highlight,
+ * Supports Monthly and Yearly billing intervals,
  * and seamless fallback for demo / sandbox environments.
  */
 
@@ -136,7 +136,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     : 'text-[#70706B] hover:text-[#171717]'
                 }`}
               >
-                Monthly (${PLANS.pro.prices.monthly.amount}/mo)
+                Monthly ({PLANS.pro.prices.monthly.formatted}/mo)
               </button>
               <button
                 type="button"
@@ -148,10 +148,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     : 'text-[#70706B] hover:text-[#171717]'
                 }`}
               >
-                <span>Yearly (${PLANS.pro.prices.yearly.amount}/yr)</span>
-                <span className="px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded">
-                  Save 31%
-                </span>
+                <span>Yearly ({PLANS.pro.prices.yearly.formatted}/yr)</span>
               </button>
             </div>
           </div>
@@ -212,18 +209,14 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-[#171717]">
-                  ${interval === 'yearly' ? (price.amount / 12).toFixed(2) : price.amount}
+                  {price.formatted}
                 </span>
-                <span className="text-xs text-[#70706B]">/ month</span>
-                {interval === 'yearly' && (
-                  <span className="text-[11px] text-[#70706B]">
-                    (billed annually at ${price.amount})
-                  </span>
-                )}
+                <span className="text-xs text-[#70706B]">{interval === 'yearly' ? '/ year' : '/ month'}</span>
+                {interval === 'yearly' && <span className="text-[11px] text-[#70706B]">Billed annually</span>}
               </div>
               <p className="text-xs text-[#2563EB] font-medium mt-0.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#2563EB]" />
-                <span>14-day free trial included. Cancel anytime before trial ends.</span>
+                <span>See Checkout for the current price and any available trial.</span>
               </p>
             </div>
 
@@ -241,7 +234,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                 </>
               ) : (
                 <>
-                  <span>Start 14-Day Free Trial</span>
+                  <span>Review Pro Checkout</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -249,7 +242,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           </div>
 
           <p className="text-[11px] text-center text-[#8A8A85]">
-            Secure checkout powered by Stripe. You won't be charged if you cancel before your trial ends.
+            Secure checkout powered by Stripe. Review all payment terms before confirming.
           </p>
         </div>
       </div>

@@ -50,7 +50,7 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
     if (!bookmark) return;
     setIsLoadingRelated(true);
     api.getRelatedBookmarks(bookmark.id)
-      .then((data) => setRelated(data))
+      .then((data) => setRelated(data.map(item => item.bookmark)))
       .catch((err) => console.warn('Failed to fetch related:', err))
       .finally(() => setIsLoadingRelated(false));
   }, [bookmark]);

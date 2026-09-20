@@ -47,7 +47,7 @@ export interface PlanDefinition {
       defaultPriceId: string;
     };
     yearly: {
-      amount: number; // in USD (annual total: $84, equivalent to $7/mo)
+      amount: number; // Display placeholder until the commercial price is configured.
       monthlyEquivalent: number;
       formatted: string;
       priceIdEnvVar: string;
@@ -59,12 +59,14 @@ export interface PlanDefinition {
   marketingHighlights: string[];
 }
 
+const displayPrice = () => ({ amount: 0, formatted: 'See checkout' });
+
 export const PLANS: Record<PlanId, PlanDefinition> = {
   free: {
     id: 'free',
     name: 'Free',
     tagline: 'Experience personal recall',
-    description: 'Connect X and experience automatic bookmark organization and search.',
+    description: 'Connect X and import bookmarks with complimentary credits.',
     prices: {
       monthly: {
         amount: 0,
@@ -81,11 +83,11 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       },
     },
     limits: {
-      bookmarkLimit: 50,
+      bookmarkLimit: null, // Import Credits now govern new external knowledge.
       monthlyAskLimit: 10,
       monthlyEnrichmentLimit: 25,
       syncAccountLimit: 1,
-      syncIntervalHours: 24, // Free: sync once daily
+      syncIntervalHours: 24, // Manual sync on Free; no automatic schedule.
     },
     features: {
       semanticSearch: false, // Lexical search with high quality ranking
@@ -96,7 +98,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       exportData: true,
     },
     marketingHighlights: [
-      'Up to 50 saved bookmarks',
+      'Import new bookmarks with Import Credits',
       '10 Ask Recallly AI questions / month',
       '25 AI-enriched bookmarks with key takeaways',
       'Fast lexical search & topic categorization',
@@ -112,17 +114,17 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     badge: 'Most Popular',
     prices: {
       monthly: {
-        amount: 9,
-        formatted: '$9',
+        amount: displayPrice().amount,
+        formatted: displayPrice().formatted,
         priceIdEnvVar: 'STRIPE_PRO_MONTHLY_PRICE_ID',
-        defaultPriceId: 'price_pro_monthly_recallly',
+        defaultPriceId: '',
       },
       yearly: {
-        amount: 84, // $7/mo billed annually
-        monthlyEquivalent: 7,
-        formatted: '$7',
+        amount: displayPrice().amount,
+        monthlyEquivalent: 0,
+        formatted: displayPrice().formatted,
         priceIdEnvVar: 'STRIPE_PRO_YEARLY_PRICE_ID',
-        defaultPriceId: 'price_pro_yearly_recallly',
+        defaultPriceId: '',
       },
     },
     limits: {
@@ -141,7 +143,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       exportData: true,
     },
     marketingHighlights: [
-      'Unlimited bookmark syncing & archiving',
+      'Automatic Smart Sync with included monthly imports',
       '500 Ask Recallly conversational AI queries / month',
       'Unlimited AI summaries & keyword tagging',
       'Hybrid semantic vector search (RRF)',

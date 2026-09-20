@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { mapSavedItemRowToBookmark, mapCollectionRowToCollection, mapProfileRowToProfile, mapConnectedAccountSafeToAccount, mapDigestRowToDigest, mapDigestSettingsRowToSettings, mapTopicRowToTopic } from '../src/lib/repositories/supabase/mappers';
 import { PLANS } from '../src/config/plans';
 import { beginLiveXOAuth, disconnectLiveX, syncLiveX, isLiveXConfigured } from './sources/x-live';
+import { CreditService } from './economics/credit-service';
+import { importConfig, isImportPackKey } from './economics/config';
+import { LiveStripeService } from './economics/live-stripe';
+import { recordImportEvent } from './economics/analytics';
+import { economicsAdmin } from './economics/credit-service';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -42,11 +47,25 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if ((route === '/integrations/x/sync' || route === '/sources/x/sync') && method === 'POST') {
-      const result = await syncLiveX(user.id);
+      const limit = req.body?.limit;
+      if (limit !== undefined && (!Number.isSafeInteger(limit) || limit <= 0)) { res.status(400).json({ error: 'Invalid import limit.' }); return; }
+      let result;
+      try {
+        result = await syncLiveX(user.id, { limit, historical: Boolean(req.body?.historical), continueImport: req.body?.continueImport === true });
+      } catch (error) {
+        console.error('X sync preflight/import failed:', error);
+        res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Recallly library is still available.' });
+        return;
+      }
+      if (result.success) await recordImportEvent(user.id, 'import_completed', { imported: result.addedCount, read: result.discoveredCount });
+      else if (result.statusCode === 402) await recordImportEvent(user.id, 'import_credit_limit_reached');
       res.status(result.success ? 200 : ('statusCode' in result ? result.statusCode : 409)).json(result);
       return;
     }
     if (route === '/user/profile' && method === 'GET') {
+      const activeCutoff = new Date(Date.now() - 6 * 3600000).toISOString();
+      await db.from('profiles').update({ last_active_at: new Date().toISOString() }).eq('user_id', user.id)
+        .or(`last_active_at.is.null,last_active_at.lt.${activeCutoff}`);
       const { data, error } = await db.from('profiles').select('*').eq('user_id', user.id).single();
       if (error) throw error;
       res.json(mapProfileRowToProfile(data, user.email));
@@ -72,11 +91,15 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       const { data, error } = await db.from('connected_accounts_safe').select('*').eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
       if (error) throw error;
       const account = data ? mapConnectedAccountSafeToAccount(data) : null;
+      const { data: importState, error: importStateError } = await economicsAdmin().from('connected_accounts')
+        .select('sync_cursor').eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
+      if (importStateError) throw importStateError;
       res.json({
         connected: Boolean(account?.connected), username: account?.username || '',
         displayName: account?.displayName || '', avatarUrl: account?.avatarUrl || '',
         last_sync_at: account?.last_sync_at, last_successful_sync: account?.last_successful_sync,
         sync_status: account?.sync_status || 'idle', configured: isLiveXConfigured(),
+        hasPendingImport: Boolean(importState?.sync_cursor),
         redirectUri: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/integrations/x/callback` : null,
       });
       return;
@@ -149,7 +172,35 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if (route === '/billing/config' && method === 'GET') {
-      res.json({ plans: PLANS, defaultTrialDays: 7, isStripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY) });
+      const config = importConfig();
+      res.json({ plans: PLANS, defaultTrialDays: 0, isStripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
+        proMonthlyImports: config.proMonthlyCredits,
+        importPacks: Object.entries(config.packs).filter(([, p]) => p.credits > 0 && p.priceId)
+          .map(([key, p]) => ({ key, credits: p.credits })) });
+      return;
+    }
+    if (route === '/billing/import-credits' && method === 'GET') {
+      // Signup/migration grant keys are stable and therefore safe to retry on every wallet read.
+      await CreditService.ensureInitialGrant(user.id);
+      await CreditService.ensureMonthlyAllowance(user.id);
+      await recordImportEvent(user.id, 'import_credits_viewed');
+      res.json(await CreditService.wallet(user.id));
+      return;
+    }
+    if (route === '/billing/checkout' && method === 'POST') {
+      if (req.body?.pack !== undefined && !isImportPackKey(req.body.pack)) { res.status(400).json({ error: 'Unknown Import Credit pack.' }); return; }
+      if (isImportPackKey(req.body?.pack)) await recordImportEvent(user.id, 'import_pack_selected', { pack: req.body.pack });
+      const origin = process.env.APP_URL?.replace(/\/$/, '');
+      if (!origin) throw new Error('Checkout origin is not configured.');
+      const checkout = await LiveStripeService.checkout(user.id, user.email, origin, req.body || {});
+      if (isImportPackKey(req.body?.pack)) await recordImportEvent(user.id, 'import_checkout_started', { pack: req.body.pack });
+      res.json(checkout);
+      return;
+    }
+    if (route === '/billing/portal' && method === 'POST') {
+      const origin = process.env.APP_URL?.replace(/\/$/, '');
+      if (!origin) throw new Error('Billing origin is not configured.');
+      res.json(await LiveStripeService.portal(user.id, origin));
       return;
     }
     if (route === '/billing/entitlements' && method === 'GET') {

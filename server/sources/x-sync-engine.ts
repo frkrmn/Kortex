@@ -91,7 +91,7 @@ export class XSyncEngine {
 
   constructor() {
     // Periodically clean expired PKCE states
-    setInterval(() => {
+    const cleanup = setInterval(() => {
       const now = Date.now();
       for (const [state, rec] of this.stateCache.entries()) {
         if (now - rec.createdAt > 1000 * 60 * 15) {
@@ -99,6 +99,7 @@ export class XSyncEngine {
         }
       }
     }, 1000 * 60 * 5);
+    cleanup.unref();
   }
 
   /**
@@ -159,6 +160,10 @@ export class XSyncEngine {
     instructions?: string;
   } {
     const redirectUri = this.getRedirectUri(reqOrigin);
+    if (process.env.VITE_DEMO_MODE !== 'false') {
+      return { url: null, state: '', configured: false, redirectUri,
+        instructions: 'Demo mode uses a sample X stream without external API calls.' };
+    }
     const clientId = this.getClientId();
     const state = crypto.randomBytes(16).toString('hex');
     const codeVerifier = this.generateCodeVerifier();
@@ -543,196 +548,11 @@ export class XSyncEngine {
     items: Bookmark[];
     error?: string;
   }> {
-    this.progressState = {
-      isSyncing: true,
-      stage: 'fetching',
-      processedCount: 0,
-      totalCount: 0,
-      message: 'Connecting to X API v2 and retrieving bookmarks...',
-    };
-
-    const tokenInfo = await this.getValidAccessToken(userId);
-
-    if (!tokenInfo) {
-      // Check if connected account exists in store
-      const connectedAcc = store.getConnectedAccounts().find(a => a.provider === 'twitter' && a.connected);
-      if (!connectedAcc) {
-        this.progressState = {
-          isSyncing: false,
-          stage: 'idle',
-          processedCount: 0,
-          totalCount: 0,
-          message: 'X account is not connected.',
-        };
-        return {
-          success: false,
-          addedCount: 0,
-          discoveredCount: 0,
-          items: [],
-          error: 'X account is not connected. Please connect X first.',
-        };
-      }
-
-      // If connected in store (e.g. test or imported account), execute sync using existing/sample stream
-      return this.executeSampleSync(userId);
+    if (process.env.VITE_DEMO_MODE === 'false') {
+      return { success: false, addedCount: 0, discoveredCount: 0, items: [],
+        error: 'Live X sync must use the production credit and budget protected handler.' };
     }
-
-    try {
-      this.progressState.message = 'Fetching authenticated user bookmarks...';
-
-      const bookmarksUrl = new URL(`https://api.twitter.com/2/users/${tokenInfo.xUserId}/bookmarks`);
-      bookmarksUrl.searchParams.set('max_results', '20');
-      bookmarksUrl.searchParams.set('expansions', 'author_id,attachments.media_keys');
-      bookmarksUrl.searchParams.set('tweet.fields', 'created_at,text,public_metrics,entities,note_tweet');
-      bookmarksUrl.searchParams.set('user.fields', 'name,username,profile_image_url');
-      bookmarksUrl.searchParams.set('media.fields', 'url,preview_image_url,type,width,height,alt_text');
-
-      const response = await fetch(bookmarksUrl.toString(), {
-        headers: {
-          Authorization: `Bearer ${tokenInfo.token}`,
-        },
-      });
-
-      if (response.status === 429) {
-        const resetHeader = response.headers.get('x-rate-limit-reset');
-        const resetMinutes = resetHeader
-          ? Math.max(1, Math.round((parseInt(resetHeader, 10) * 1000 - Date.now()) / (1000 * 60)))
-          : 15;
-        this.progressState = {
-          isSyncing: false,
-          stage: 'idle',
-          processedCount: 0,
-          totalCount: 0,
-          message: `X API Rate limit reached. Resets in approximately ${resetMinutes} minutes.`,
-        };
-        return {
-          success: false,
-          addedCount: 0,
-          discoveredCount: 0,
-          items: [],
-          error: `X API rate limit reached (180 requests/15m). Resets in ${resetMinutes} minutes.`,
-        };
-      }
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        console.error('X API Bookmarks Error:', response.status, errBody);
-        this.progressState = {
-          isSyncing: false,
-          stage: 'idle',
-          processedCount: 0,
-          totalCount: 0,
-          message: `X API error: ${response.statusText}`,
-        };
-        return {
-          success: false,
-          addedCount: 0,
-          discoveredCount: 0,
-          items: [],
-          error: `X API bookmarks request returned ${response.status}: ${response.statusText}`,
-        };
-      }
-
-      const json: XBookmarksResponse = await response.json();
-      const rawTweets = json.data || [];
-
-      this.progressState.stage = 'organizing';
-      this.progressState.totalCount = rawTweets.length;
-      this.progressState.message = `Discovered ${rawTweets.length} bookmarks. Normalizing...`;
-
-      // Build lookup maps for includes
-      const authorMap = new Map<string, XApiUser>();
-      if (json.includes?.users) {
-        for (const u of json.includes.users) {
-          authorMap.set(u.id, u);
-        }
-      }
-
-      const mediaMap = new Map<string, XApiMedia>();
-      if (json.includes?.media) {
-        for (const m of json.includes.media) {
-          mediaMap.set(m.media_key, m);
-        }
-      }
-
-      // Existing bookmarks to prevent duplicates
-      const existing = store.getBookmarks();
-      const existingExternalIds = new Set(existing.map(b => b.external_id));
-
-      const newNormalized: Bookmark[] = [];
-
-      for (let i = 0; i < rawTweets.length; i++) {
-        const t = rawTweets[i];
-        if (existingExternalIds.has(t.id)) {
-          continue; // Deduplicate
-        }
-
-        const author = t.author_id ? authorMap.get(t.author_id) : undefined;
-        const normalized = this.normalizeTweet(t, author, mediaMap, userId);
-        newNormalized.push(normalized);
-
-        this.progressState.processedCount = newNormalized.length;
-      }
-
-      this.progressState.stage = 'indexing';
-      this.progressState.message = `Saving ${newNormalized.length} new bookmarks to Recallly library...`;
-
-      // Persist newly normalized items to store
-      for (const item of newNormalized) {
-        store.getBookmarks().unshift(item);
-      }
-
-      // Trigger asynchronous background AI enrichment for newly imported bookmarks
-      if (newNormalized.length > 0) {
-        enrichmentPipeline.enqueueBatch(newNormalized.map(b => b.id));
-      }
-
-      // Update sync timestamps and compute next scheduled sync time
-      const sub = store.getSubscription();
-      const isPro = sub?.status === 'active' || sub?.plan === 'pro';
-      const intervalHours = isPro ? 2 : 24;
-      const nextSyncAt = new Date(Date.now() + intervalHours * 60 * 60 * 1000).toISOString();
-
-      store.updateConnectedAccount('twitter', {
-        last_sync_at: new Date().toISOString(),
-        last_successful_sync: new Date().toISOString(),
-        next_sync_at: nextSyncAt,
-        sync_status: 'idle',
-        reauthorization_required: false,
-        errorMessage: undefined,
-      });
-
-      this.progressState = {
-        isSyncing: false,
-        stage: 'complete',
-        processedCount: newNormalized.length,
-        totalCount: rawTweets.length,
-        message: `Successfully synced ${newNormalized.length} new bookmarks.`,
-      };
-
-      return {
-        success: true,
-        addedCount: newNormalized.length,
-        discoveredCount: rawTweets.length,
-        items: newNormalized,
-      };
-    } catch (err: any) {
-      console.error('Error during bookmark sync:', err);
-      this.progressState = {
-        isSyncing: false,
-        stage: 'idle',
-        processedCount: 0,
-        totalCount: 0,
-        message: err.message || 'Sync failed',
-      };
-      return {
-        success: false,
-        addedCount: 0,
-        discoveredCount: 0,
-        items: [],
-        error: err.message || 'Sync failed',
-      };
-    }
+    return this.executeSampleSync(userId);
   }
 
   /**

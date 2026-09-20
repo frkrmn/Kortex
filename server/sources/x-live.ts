@@ -156,7 +156,11 @@ export async function disconnectLiveX(userId: string) {
   return { success: true };
 }
 
-export async function syncLiveX(userId: string) {
+export async function syncLiveX(userId: string, options: { limit?: number; historical?: boolean; continueImport?: boolean; automatic?: boolean } = {}) {
+  const { CreditService } = await import('../economics/credit-service');
+  const { ProviderBudgetService } = await import('../economics/provider-budget');
+  const { importConfig } = await import('../economics/config');
+  const { recordImportEvent } = await import('../economics/analytics');
   const db = admin();
   const { data: account, error } = await db.from('connected_accounts').select('*')
     .eq('user_id', userId).eq('provider', 'twitter').maybeSingle();
@@ -164,6 +168,29 @@ export async function syncLiveX(userId: string) {
   if (!account || !account.access_token_encrypted || !account.provider_user_id) {
     return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'X account is not connected.' };
   }
+  if (account.next_sync_at && new Date(account.next_sync_at).getTime() > Date.now()) {
+    return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429,
+      error: 'X sync is temporarily limited. Please try again later.' };
+  }
+  await CreditService.ensureInitialGrant(userId);
+  await CreditService.ensureMonthlyAllowance(userId);
+  const settings = importConfig().x;
+  const balance = await CreditService.balance(userId);
+  if (balance <= 0) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 402,
+    error: "You've used your available imports. Add Import Credits or wait for your next allowance." };
+  const requested = Number.isSafeInteger(options.limit) && (options.limit || 0) > 0
+    ? Math.min(options.limit!, settings.maxHistoricalItems) : settings.initialPageSize;
+  const maxItems = Math.min(requested, balance);
+  const firstPageSize = Math.max(1, Math.min(100, maxItems, options.historical ? settings.initialPageSize : settings.incrementalPageSize));
+  const { data: subscription, error: subscriptionError } = await db.from('subscriptions')
+    .select('plan,status,current_period_end').eq('user_id', userId).maybeSingle();
+  if (subscriptionError) throw subscriptionError;
+  const isPro = subscription?.plan === 'pro' && (subscription.status === 'active' || subscription.status === 'past_due' || subscription.status === 'trialing') &&
+    Boolean(subscription.current_period_end && new Date(subscription.current_period_end).getTime() > Date.now());
+  const priority = options.automatic ? 'automatic' : isPro ? 'paid_manual' : 'free_manual';
+  const preflight = await ProviderBudgetService.canPerformOperation(userId, firstPageSize, priority);
+  if (!preflight.allowed) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
+  await recordImportEvent(userId, 'import_started', { requested, historical: Boolean(options.historical), automatic: Boolean(options.automatic) });
   let accessToken = decryptToken(account.access_token_encrypted);
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() < Date.now() + 120000) {
     if (!account.refresh_token_encrypted) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
@@ -189,13 +216,13 @@ export async function syncLiveX(userId: string) {
 
   // Compare-and-set on a server-written timestamp limits provider calls even
   // when two app instances receive sync requests at the same time.
-  const cutoff = new Date(Date.now() - 60_000).toISOString();
+  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
   const { data: lock, error: lockError } = await db.from('connected_accounts')
     .update({ sync_status: 'syncing', last_sync_at: new Date().toISOString() })
     .eq('id', account.id).eq('user_id', userId)
     .or(`last_sync_at.is.null,last_sync_at.lt.${cutoff}`).select('id').maybeSingle();
   if (lockError) throw lockError;
-  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429, error: 'Please wait a minute before syncing again.' };
+  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429, error: 'Please wait a few minutes before syncing again.' };
 
   const { data: job, error: jobError } = await db.from('sync_jobs').insert({ user_id: userId, provider: 'twitter',
     connected_account_id: account.id, status: 'running', started_at: new Date().toISOString() }).select().single();
@@ -204,47 +231,95 @@ export async function syncLiveX(userId: string) {
     throw jobError;
   }
   try {
-    const url = new URL(`https://api.x.com/2/users/${encodeURIComponent(account.provider_user_id)}/bookmarks`);
-    url.searchParams.set('max_results', '100');
-    url.searchParams.set('expansions', 'author_id');
-    url.searchParams.set('tweet.fields', 'created_at,note_tweet');
-    url.searchParams.set('user.fields', 'name,username,profile_image_url');
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (response.status === 402) {
-      throw new XBookmarkPaymentRequiredError('X API returned 402 Payment Required. Check your X Developer Console credit balance and spending limit before retrying.');
+    let nextToken: string | undefined = options.historical && options.continueImport && account.sync_cursor !== '__first__'
+      ? account.sync_cursor || undefined : undefined;
+    let discovered = 0;
+    let added = 0;
+    let charged = 0;
+    const savedIds: string[] = [];
+    for (let page = 0; page < settings.maxPages && added < maxItems; page++) {
+      const pageSize = Math.max(1, Math.min(100, maxItems - added, options.historical ? settings.initialPageSize : settings.incrementalPageSize));
+      if (page > 0) {
+        const budget = await ProviderBudgetService.canPerformOperation(userId, pageSize, priority);
+        if (!budget.allowed) break;
+      }
+      const reservationId = await ProviderBudgetService.reserve(userId, pageSize, priority);
+      if (!reservationId) break;
+      const url = new URL(`https://api.x.com/2/users/${encodeURIComponent(account.provider_user_id)}/bookmarks`);
+      const pageRequestToken = nextToken;
+      url.searchParams.set('max_results', String(pageSize));
+      url.searchParams.set('expansions', 'author_id');
+      url.searchParams.set('post.fields', 'created_at,note_post');
+      url.searchParams.set('user.fields', 'name,username,profile_image_url');
+      if (nextToken) url.searchParams.set('pagination_token', nextToken);
+      let response: globalThis.Response;
+      try { response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15_000) }); }
+      catch (error) {
+        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: pageSize, importedItems: 0, estimated: true });
+        throw error;
+      }
+      if (!response.ok) {
+        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: 0, importedItems: 0,
+          requestId: response.headers.get('x-request-id') || undefined });
+        if (response.status === 429) {
+          const reset = Number(response.headers.get('x-rate-limit-reset'));
+          const retryAt = Number.isFinite(reset) && reset * 1000 > Date.now() ? new Date(reset * 1000) : new Date(Date.now() + 15 * 60000);
+          await db.from('connected_accounts').update({ next_sync_at: retryAt.toISOString() }).eq('id', account.id);
+        }
+        if (response.status === 402) throw new XBookmarkPaymentRequiredError('X sync is temporarily unavailable. Your existing Recallly library is still available.');
+        throw new Error(`X bookmarks request failed (${response.status}).`);
+      }
+      let payload: any;
+      try { payload = await response.json(); }
+      catch (error) {
+        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: pageSize, importedItems: 0,
+          requestId: response.headers.get('x-request-id') || undefined, estimated: true });
+        throw error;
+      }
+      const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string;
+        note_post?: { text?: string }; note_tweet?: { text?: string } }> = payload.data || [];
+      // Persist provider cost before importing. If this fails, no item/credit transaction proceeds.
+      await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: tweets.length,
+        importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
+      discovered += tweets.length;
+      const authors = new Map((payload.includes?.users || []).map((author: any) => [author.id, author]));
+      let pageAdded = 0;
+      let processedTweets = 0;
+      try {
+        for (const tweet of tweets) {
+          if (added >= maxItems) break;
+          processedTweets++;
+          if (typeof tweet.id !== 'string' || typeof tweet.text !== 'string') continue;
+          const author: any = authors.get(tweet.author_id);
+          const row = { content: tweet.note_post?.text || tweet.note_tweet?.text || tweet.text,
+            url: `https://x.com/${author?.username || 'i'}/status/${tweet.id}`, author_id: tweet.author_id || null,
+            author_name: author?.name || '', author_username: author?.username || '', author_avatar_url: author?.profile_image_url || null,
+            published_at: tweet.created_at || null, metadata: {} };
+          const result = await CreditService.importX(userId, tweet.id, row, job.id);
+          if (result?.imported) { added++; pageAdded++; savedIds.push(result.item_id); }
+          if (result?.charged) charged++;
+        }
+      } finally {
+        await ProviderBudgetService.updateImportedItems(reservationId, pageAdded, tweets.length);
+      }
+      nextToken = processedTweets < tweets.length ? pageRequestToken || '__first__'
+        : typeof payload.meta?.next_token === 'string' ? payload.meta.next_token : undefined;
+      if (!nextToken || !tweets.length) break;
     }
-    if (!response.ok) throw new Error(`X bookmarks request failed (${response.status}).`);
-    const payload = await response.json();
-    const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string; note_tweet?: { text?: string } }> = payload.data || [];
-    const authors = new Map((payload.includes?.users || []).map((author: any) => [author.id, author]));
-    const rows = tweets.filter(tweet => typeof tweet.id === 'string' && typeof tweet.text === 'string').map(tweet => {
-      const author: any = authors.get(tweet.author_id);
-      return { user_id: userId, source: 'twitter', external_id: tweet.id, content: tweet.note_tweet?.text || tweet.text,
-        url: `https://x.com/${author?.username || 'i'}/status/${tweet.id}`, author_id: tweet.author_id || null,
-        author_name: author?.name || '', author_username: author?.username || '', author_avatar_url: author?.profile_image_url || null,
-        published_at: tweet.created_at || null, saved_at: new Date().toISOString(), metadata: {} };
-    });
-    const { data: existing, error: existingError } = rows.length
-      ? await db.from('saved_items').select('external_id').eq('user_id', userId).eq('source', 'twitter')
-        .in('external_id', rows.map(row => row.external_id))
-      : { data: [], error: null };
-    if (existingError) throw existingError;
-    const seen = new Set((existing || []).map(item => item.external_id));
-    const newRows = rows.filter(row => {
-      if (seen.has(row.external_id)) return false;
-      seen.add(row.external_id);
-      return true;
-    });
-    const { data: saved, error: saveError } = newRows.length
-      ? await db.from('saved_items').insert(newRows).select()
+    const { data: saved, error: saveError } = savedIds.length
+      ? await db.from('saved_items').select('*').eq('user_id', userId).in('id', savedIds)
       : { data: [], error: null };
     if (saveError) throw saveError;
+    if (discovered > 0 && added === 0) await recordImportEvent(userId, 'sync_zero_yield', { resourcesRead: discovered });
     const now = new Date().toISOString();
     await Promise.all([
-      db.from('sync_jobs').update({ status: 'completed', items_discovered: tweets.length, items_processed: saved?.length || 0, completed_at: now }).eq('id', job.id),
-      db.from('connected_accounts').update({ sync_status: 'idle', last_sync_at: now, last_successful_sync_at: now }).eq('id', account.id),
+      db.from('sync_jobs').update({ status: 'completed', items_discovered: discovered, items_processed: added,
+        cursor: options.historical ? nextToken || null : null, completed_at: now }).eq('id', job.id),
+      db.from('connected_accounts').update({ sync_status: 'idle', last_sync_at: now, last_successful_sync_at: now,
+        next_sync_at: null, ...(options.historical ? { sync_cursor: nextToken || null } : {}) }).eq('id', account.id),
     ]);
-    return { success: true, addedCount: saved?.length || 0, discoveredCount: tweets.length,
+    return { success: true, addedCount: added, creditsConsumed: charged, discoveredCount: discovered,
+      hasMore: Boolean(nextToken),
       items: (saved || []).map(row => mapSavedItemRowToBookmark(row)) };
   } catch (syncError) {
     const paymentRequired = syncError instanceof XBookmarkPaymentRequiredError;

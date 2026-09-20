@@ -1,0 +1,74 @@
+import { PGlite } from '@electric-sql/pglite';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+
+const db = new PGlite();
+await db.exec(`
+CREATE SCHEMA auth;
+CREATE ROLE anon;
+CREATE ROLE authenticated;
+CREATE ROLE service_role;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('test.user_id', true),'')::uuid $$;
+CREATE TABLE auth.users(id uuid PRIMARY KEY);
+CREATE TABLE profiles(user_id uuid PRIMARY KEY REFERENCES auth.users(id));
+CREATE TABLE saved_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES auth.users(id),source text,external_id text,content text,
+  url text,author_id text,author_name text,author_username text,author_avatar_url text,published_at timestamptz,saved_at timestamptz,metadata jsonb,
+  UNIQUE(user_id,source,external_id));
+CREATE TABLE sync_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid());
+CREATE TABLE processing_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,saved_item_id uuid,job_type text,status text);
+CREATE TABLE job_queue(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,type text,status text,priority integer,metadata jsonb);
+CREATE TABLE subscriptions(user_id uuid PRIMARY KEY,plan text,status text);
+INSERT INTO auth.users(id) VALUES('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
+`);
+const sql = fs.readFileSync('supabase/migrations/20260919000004_import_economics.sql','utf8');
+await db.exec(sql);
+await db.exec(`SET request.jwt.claim.role = 'service_role'`);
+const one = '00000000-0000-0000-0000-000000000001';
+const two = '00000000-0000-0000-0000-000000000002';
+const job = await db.query(`INSERT INTO sync_jobs DEFAULT VALUES RETURNING id`);
+const jobId = job.rows[0].id;
+const grant = async (user, qty, key) => db.query(`SELECT grant_import_credits($1,$2,'signup',$3)`,[user,qty,key]);
+await grant(one,10,'initial:user-one:v1');
+await grant(one,10,'initial:user-one:v1');
+assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[one])).rows[0].available_credits,10);
+const row = {content:'Hello',url:'https://x.com/a/status/1',author_name:'A'};
+const imported = await db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[one,'post-1',JSON.stringify(row),jobId]);
+assert.equal(imported.rows[0].charged,true);
+const duplicate = await db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[one,'post-1',JSON.stringify(row),jobId]);
+assert.equal(duplicate.rows[0].charged,false);
+assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[one])).rows[0].available_credits,9);
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1 AND type='import_consumption'`,[one])).rows[0].n,1);
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM job_queue WHERE user_id=$1`,[one])).rows[0].n,1);
+const race = await Promise.all([
+  db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[one,'post-race',JSON.stringify(row),jobId]),
+  db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[one,'post-race',JSON.stringify(row),jobId]),
+]);
+assert.equal(race.filter(result => result.rows[0].charged).length,1);
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM saved_items WHERE user_id=$1 AND external_id='post-race'`,[one])).rows[0].n,1);
+const beforePurchases = (await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[one])).rows[0].available_credits;
+for (let i=0;i<2;i++) await db.query(`SELECT grant_import_credits($1,1000,'purchase','stripe:checkout:cs_test_1')`,[one]);
+for (let i=0;i<2;i++) await db.query(`SELECT grant_import_credits($1,100,'monthly','subscription:sub_test:2026-09:credits')`,[one]);
+assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[one])).rows[0].available_credits,beforePurchases+1100);
+await assert.rejects(db.query(`SELECT grant_import_credits($1,-1,'support','negative-test')`,[one]));
+await assert.rejects(db.query(`SELECT grant_import_credits($1,1000,'purchase','stripe:checkout:cs_test_1')`,[two]));
+await db.query(`INSERT INTO subscriptions(user_id,plan,status) VALUES($1,'pro','active')`,[one]);
+await db.query(`UPDATE subscriptions SET plan='free',status='canceled' WHERE user_id=$1`,[one]);
+assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[one])).rows[0].available_credits,beforePurchases+1100);
+await grant(two,1,'initial:user-two:v1');
+await db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[two,'post-a',JSON.stringify(row),jobId]);
+await assert.rejects(db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[two,'post-b',JSON.stringify(row),jobId]));
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM saved_items WHERE user_id=$1`,[two])).rows[0].n,1);
+await assert.rejects(db.query(`UPDATE credit_ledger SET balance_delta=999 WHERE user_id=$1`,[one]));
+const reserve = await db.query(`SELECT reserve_provider_budget($1,'x',1,1,1) AS id`,[one]);
+assert.ok(reserve.rows[0].id);
+assert.equal((await db.query(`SELECT reserve_provider_budget($1,'x',1,1,1) AS id`,[one])).rows[0].id,null);
+await db.query(`SELECT settle_provider_budget($1,$2,10,1,0.1,'test',NULL,false)`,[reserve.rows[0].id,jobId]);
+assert.equal((await db.query(`SELECT resources_read FROM provider_usage_events`)).rows[0].resources_read,10);
+await db.exec(`SET test.user_id = '${one}'; SET ROLE authenticated`);
+assert.ok((await db.query(`SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1`,[one])).rows[0].n > 0);
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1`,[two])).rows[0].n,0);
+await assert.rejects(db.query(`UPDATE credit_balances SET available_credits=100 WHERE user_id=$1`,[two]));
+await assert.rejects(db.query(`SELECT * FROM provider_usage_events`));
+await db.exec(`RESET ROLE`);
+await db.close();
+console.log('migration, atomic import, replayed grants, negative inputs, RLS, downgrade, and budget reservation passed');

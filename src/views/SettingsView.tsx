@@ -59,6 +59,14 @@ export const SettingsView: React.FC = () => {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
+  const [availableImports, setAvailableImports] = useState<number | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [isImportingHistory, setIsImportingHistory] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'sources' && (import.meta as any).env.VITE_DEMO_MODE === 'false')
+      void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => setAvailableImports(null));
+  }, [activeTab]);
+  useEffect(() => { setHistoryHasMore(Boolean(xStatus.hasPendingImport)); }, [xStatus.hasPendingImport]);
 
   // Sync tab with URL search parameter
   useEffect(() => {
@@ -88,8 +96,7 @@ export const SettingsView: React.FC = () => {
         setIsConnecting(false);
         showToast(`Connected as @${data.data.username}`);
         await refreshXStatus();
-        // Trigger sync right after connect
-        syncXBookmarks();
+        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       } else if (data?.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
         setConnectError(data.error || 'Authorization failed.');
@@ -154,7 +161,7 @@ export const SettingsView: React.FC = () => {
       if (testRes.success) {
         await refreshXStatus();
         showToast('Connected to test X stream');
-        syncXBookmarks();
+        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       }
     } catch (e) {
       showToast('Could not connect test stream');
@@ -453,20 +460,25 @@ export const SettingsView: React.FC = () => {
                           <span className="font-medium text-[#171717]">@{xStatus.username}</span> • Last synchronized {formatLastSync(xStatus.last_successful_sync || xStatus.last_sync_at)}
                         </>
                       ) : (
-                        'Sync bookmarks automatically using official read-only X OAuth 2.0 PKCE.'
+                        'Connect X to import bookmarks with Import Credits.'
                       )}
                     </p>
                   </div>
                 </div>
 
                 {/* Actions */}
+                {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && (
+                  <p className="text-xs text-[#70706B] self-center">{availableImports === null ? 'Loading imports…' : `${availableImports.toLocaleString()} imports remaining`}</p>
+                )}
                 <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                   {xStatus.connected ? (
                     <>
                       <button
                         id="settings-sync-x-btn"
-                        onClick={syncXBookmarks}
-                        disabled={syncProgress.isSyncing}
+                        onClick={async () => { await syncXBookmarks();
+                          if ((import.meta as any).env.VITE_DEMO_MODE === 'false')
+                            void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {}); }}
+                        disabled={syncProgress.isSyncing || ((import.meta as any).env.VITE_DEMO_MODE === 'false' && availableImports === 0)}
                         className="px-3.5 py-1.5 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-xs font-semibold text-[#FAFAF8] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${syncProgress.isSyncing ? 'animate-spin' : ''}`} />
@@ -504,6 +516,28 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
+              {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && (
+                <div className="pt-3 border-t border-[#E8E8E5] flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-[#70706B]">Historical import runs in bounded batches.</span>
+                  <button type="button" disabled={isImportingHistory || !availableImports}
+                    onClick={async () => {
+                      setIsImportingHistory(true);
+                      try {
+                        const result = await api.syncX({ limit: Math.min(1000, availableImports || 0), historical: true,
+                          continueImport: historyHasMore });
+                        setHistoryHasMore(Boolean(result.hasMore));
+                        if (result.items.length) addImportedBookmarks(result.items);
+                        showToast(`Imported ${result.addedCount} new bookmark(s).`);
+                        const wallet = await api.getImportCredits(); setAvailableImports(wallet.availableCredits);
+                        await refreshXStatus();
+                      } catch (error: any) { showToast(error.message || 'Import could not complete.'); }
+                      finally { setIsImportingHistory(false); }
+                    }} className="rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-50">
+                    {isImportingHistory ? 'Importing…' : historyHasMore ? 'Continue historical import' : 'Import up to 1,000 bookmarks'}
+                  </button>
+                </div>
+              )}
+
               {/* Cadence & Next Scheduled Sync Information */}
               {xStatus.connected && (
                 <div className="pt-3 border-t border-[#E8E8E5] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#70706B] gap-2">
@@ -513,7 +547,9 @@ export const SettingsView: React.FC = () => {
                       <span>Cadence:</span>
                     </span>
                     <span className="font-semibold text-[#171717]">
-                      {profile.plan === 'pro' ? 'Every 2 hours' : 'Every 24 hours'}
+                      {(import.meta as any).env.VITE_DEMO_MODE === 'false'
+                        ? profile.plan === 'pro' ? 'Activity-aware Smart Sync' : 'Manual sync'
+                        : profile.plan === 'pro' ? 'Every 2 hours' : 'Every 24 hours'}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold bg-[#F4F4F1] text-[#70706B]">
                       {profile.plan}
@@ -522,11 +558,11 @@ export const SettingsView: React.FC = () => {
 
                   <div className="flex items-center gap-1.5 text-[#70706B]">
                     <Calendar className="w-3.5 h-3.5 text-[#8A8A85]" />
-                    <span>Next automatic sync:</span>
+                    <span>{(import.meta as any).env.VITE_DEMO_MODE === 'false' ? 'Provider availability:' : 'Next automatic sync:'}</span>
                     <span className="font-medium text-[#171717]">
                       {xStatus.next_sync_at
                         ? new Date(xStatus.next_sync_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
-                        : 'Scheduled in background'}
+                        : (import.meta as any).env.VITE_DEMO_MODE === 'false' ? 'Available' : 'Scheduled in background'}
                     </span>
                   </div>
                 </div>

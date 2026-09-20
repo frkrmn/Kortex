@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "outputDirectory": "dist",
+  "crons": [{ "path": "/api/internal/smart-sync", "schedule": "0 8 * * *" }],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index?__path=$1" },
     { "source": "/(.*)", "destination": "/index.html" }

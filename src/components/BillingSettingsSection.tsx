@@ -37,6 +37,9 @@ export const BillingSettingsSection: React.FC = () => {
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [wallet, setWallet] = useState<Awaited<ReturnType<typeof api.getImportCredits>> | null>(null);
+  const [packs, setPacks] = useState<Array<{ key: string; credits: number }>>([]);
+  const [proMonthlyImports, setProMonthlyImports] = useState(0);
 
   // Check URL parameters for checkout results
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
@@ -50,9 +53,13 @@ export const BillingSettingsSection: React.FC = () => {
       ]);
       setSubscription(subData);
       setEntitlements(entData);
+      if ((import.meta as any).env.VITE_DEMO_MODE === 'false') {
+        const [creditData, packData] = await Promise.all([api.getImportCredits(), api.getImportPacks()]);
+        setWallet(creditData); setPacks(packData.packs); setProMonthlyImports(packData.proMonthlyImports);
+      }
 
       if (profile && profile.plan !== subData.plan) {
-        updateProfile({ plan: subData.plan });
+        updateProfile({ plan: subData.plan === 'pro' ? 'pro' : 'starter' });
       }
     } catch (err) {
       console.error('Failed to load billing data:', err);
@@ -67,8 +74,7 @@ export const BillingSettingsSection: React.FC = () => {
     // Check query params
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') === 'success') {
-      setCheckoutNotice('🎉 Payment successful! Welcome to Recallly Pro.');
-      showToast('Welcome to Recallly Pro! Unlimited features are unlocked.');
+      setCheckoutNotice('Checkout completed. Your balance updates after payment confirmation.');
     } else if (params.get('checkout') === 'cancel') {
       setCheckoutNotice('Checkout was cancelled. Your current plan was not changed.');
     } else if (params.get('portal') === 'simulated') {
@@ -100,7 +106,7 @@ export const BillingSettingsSection: React.FC = () => {
       const res = await api.simulateSubscription({ plan, status, interval });
       setSubscription(res.subscription);
       setEntitlements(res.entitlements);
-      updateProfile({ plan: res.subscription.plan });
+      updateProfile({ plan: res.subscription.plan === 'pro' ? 'pro' : 'starter' });
       showToast(`Switched plan to ${plan.toUpperCase()} (${status}).`);
     } catch (err) {
       console.error('Simulation error:', err);
@@ -138,6 +144,28 @@ export const BillingSettingsSection: React.FC = () => {
 
   return (
     <div className="space-y-6" id="billing-settings-container">
+      {(import.meta as any).env.VITE_DEMO_MODE === 'false' && (
+        <section className="rounded-2xl border border-[#E0E0DC] bg-white p-5 space-y-4">
+          <h3 className="text-lg font-bold">Import Credits</h3>
+          <p className="text-sm">{wallet ? `${wallet.availableCredits.toLocaleString()} imports remaining` : 'Credit balance unavailable'}</p>
+          {wallet && <p className="text-xs text-[#70706B]">Monthly remaining: {wallet.monthlyCredits.toLocaleString()} · Other included: {(wallet.includedCredits - wallet.monthlyCredits).toLocaleString()} · Purchased: {wallet.purchasedCredits.toLocaleString()}</p>}
+          {isPro && <p className="text-xs text-[#70706B]">Monthly Pro allowance: {proMonthlyImports.toLocaleString()} imports. Next allowance if Pro remains active: {wallet?.nextMonthlyAllowanceAt ? new Date(wallet.nextMonthlyAllowanceAt).toLocaleDateString() : 'unavailable'}.</p>}
+          <p className="text-xs text-[#70706B]">Credits are used only when new items are added. Previously imported items do not consume credits again. Purchased credits do not expire.</p>
+          <div className="flex flex-wrap gap-2">
+            {packs.map(pack => <button key={pack.key} type="button" onClick={async () => {
+              try { const checkout = await api.buyImportPack(pack.key); window.location.href = checkout.url; }
+              catch (error: any) { showToast(error.message || 'Checkout unavailable.'); }
+            }} className="rounded-xl border border-[#E0E0DC] px-4 py-2 text-xs font-semibold hover:bg-[#FAFAF8]">
+              Add {pack.credits.toLocaleString()} imports
+            </button>)}
+          </div>
+          {wallet?.transactions?.length ? <div className="space-y-1 text-xs text-[#70706B]">
+            {wallet.transactions.slice(0, 5).map((entry, index) => <p key={index}>
+              {new Date(entry.created_at).toLocaleDateString()} · {entry.type.replaceAll('_', ' ')} · {entry.balance_delta > 0 ? '+' : ''}{entry.balance_delta}
+            </p>)}
+          </div> : null}
+        </section>
+      )}
       {/* Checkout Return Notice */}
       {checkoutNotice && (
         <div
@@ -171,13 +199,13 @@ export const BillingSettingsSection: React.FC = () => {
             <Clock className="w-4 h-4 text-blue-600 shrink-0" />
             <div>
               <p className="font-bold">
-                You are currently in your 14-day Recallly Pro free trial.
+                You are currently in a Recallly Pro trial.
               </p>
               <p className="text-[11px] text-blue-700 mt-0.5">
                 {subscription?.trial_days_left !== undefined
                   ? `${subscription.trial_days_left} days remaining in trial.`
                   : 'Trial ends soon.'}{' '}
-                You will not be charged until the trial period completes.
+                Check your billing portal for the trial end date and payment terms.
               </p>
             </div>
           </div>
@@ -510,6 +538,7 @@ export const BillingSettingsSection: React.FC = () => {
         </div>
       </div>
 
+      {(import.meta as any).env.VITE_DEMO_MODE !== 'false' && <>
       {/* 3. Developer / Sandbox Simulation Switcher */}
       <div className="p-6 bg-[#FAFAF8] border border-[#E0E0DC] rounded-2xl space-y-4">
         <div className="flex items-center justify-between">
@@ -579,6 +608,7 @@ export const BillingSettingsSection: React.FC = () => {
           </button>
         </div>
       </div>
+      </>}
 
       {/* Upgrade Modal */}
       <UpgradeModal

@@ -156,7 +156,8 @@ export async function disconnectLiveX(userId: string) {
   return { success: true };
 }
 
-export async function syncLiveX(userId: string, options: { limit?: number; historical?: boolean; continueImport?: boolean; automatic?: boolean } = {}) {
+export async function syncLiveX(userId: string, options: { limit?: number; historical?: boolean; continueImport?: boolean;
+  automatic?: boolean; budgetPreflightBypassed?: boolean } = {}) {
   const { CreditService } = await import('../economics/credit-service');
   const { ProviderBudgetService } = await import('../economics/provider-budget');
   const { importConfig } = await import('../economics/config');
@@ -185,8 +186,14 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
   const isPro = subscription?.plan === 'pro' && (subscription.status === 'active' || subscription.status === 'past_due' || subscription.status === 'trialing') &&
     Boolean(subscription.current_period_end && new Date(subscription.current_period_end).getTime() > Date.now());
   const priority = options.automatic ? 'automatic' : isPro ? 'paid_manual' : 'free_manual';
-  const preflight = await ProviderBudgetService.canPerformOperation(userId, firstPageSize, priority);
-  if (!preflight.allowed) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
+  const budgetPreflightBypassed = options.budgetPreflightBypassed === true;
+  if (!budgetPreflightBypassed) {
+    const preflight = await ProviderBudgetService.canPerformOperation(userId, firstPageSize, priority);
+    if (!preflight.allowed) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
+  } else {
+    console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId, budgetPreflightBypassed: true,
+      providerRequestAttempted: false, providerStatus: null, resourcesRead: 0 }));
+  }
   await recordImportEvent(userId, 'import_started', { requested, historical: isInitialImport, automatic: Boolean(options.automatic) });
   let accessToken = decryptToken(account.access_token_encrypted);
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() < Date.now() + 120000) {
@@ -236,12 +243,13 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     const maxPages = isInitialImport ? Math.ceil(settings.bookmarkHistoryLimit / settings.initialPageSize) : settings.maxPages;
     for (let page = 0; page < maxPages && discovered < maxItems; page++) {
       const pageSize = Math.max(1, Math.min(100, maxItems - discovered, isInitialImport ? settings.initialPageSize : settings.incrementalPageSize));
-      if (page > 0) {
+      if (page > 0 && !budgetPreflightBypassed) {
         const budget = await ProviderBudgetService.canPerformOperation(userId, pageSize, priority);
         if (!budget.allowed) break;
       }
-      const reservationId = await ProviderBudgetService.reserve(userId, pageSize, priority);
-      if (!reservationId) break;
+      const reservationId = budgetPreflightBypassed ? null : await ProviderBudgetService.reserve(userId, pageSize, priority);
+      if (!budgetPreflightBypassed && !reservationId) break;
+      let e2eUsageEventId: string | null = null;
       const url = new URL(`https://api.x.com/2/users/${encodeURIComponent(account.provider_user_id)}/bookmarks`);
       const pageRequestToken = nextToken;
       url.searchParams.set('max_results', String(pageSize));
@@ -250,14 +258,29 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       url.searchParams.set('user.fields', 'name,username,profile_image_url');
       if (nextToken) url.searchParams.set('pagination_token', nextToken);
       let response: globalThis.Response;
+      if (budgetPreflightBypassed) console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId,
+        budgetPreflightBypassed: true, providerRequestAttempted: true, providerStatus: null, resourcesRead: 0 }));
       try { response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15_000) }); }
       catch (error) {
-        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: pageSize, importedItems: 0, estimated: true });
+        if (budgetPreflightBypassed) {
+          await ProviderBudgetService.recordE2ETestUsage({ userId, syncJobId: job.id, resourcesRead: pageSize,
+            importedItems: 0, estimated: true });
+        } else {
+          await ProviderBudgetService.recordUsage({ reservationId: reservationId!, syncJobId: job.id,
+            resourcesRead: pageSize, importedItems: 0, estimated: true });
+        }
         throw error;
       }
       if (!response.ok) {
-        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: 0, importedItems: 0,
-          requestId: response.headers.get('x-request-id') || undefined });
+        if (budgetPreflightBypassed) {
+          await ProviderBudgetService.recordE2ETestUsage({ userId, syncJobId: job.id, resourcesRead: 0, importedItems: 0,
+            providerStatus: response.status, requestId: response.headers.get('x-request-id') || undefined });
+          console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId, budgetPreflightBypassed: true,
+            providerRequestAttempted: true, providerStatus: response.status, resourcesRead: 0 }));
+        } else {
+          await ProviderBudgetService.recordUsage({ reservationId: reservationId!, syncJobId: job.id, resourcesRead: 0,
+            importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
+        }
         if (response.status === 429) {
           const reset = Number(response.headers.get('x-rate-limit-reset'));
           const retryAt = Number.isFinite(reset) && reset * 1000 > Date.now() ? new Date(reset * 1000) : new Date(Date.now() + 15 * 60000);
@@ -269,8 +292,13 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       let payload: any;
       try { payload = await response.json(); }
       catch (error) {
-        await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: pageSize, importedItems: 0,
-          requestId: response.headers.get('x-request-id') || undefined, estimated: true });
+        if (budgetPreflightBypassed) {
+          await ProviderBudgetService.recordE2ETestUsage({ userId, syncJobId: job.id, resourcesRead: pageSize, importedItems: 0,
+            providerStatus: response.status, requestId: response.headers.get('x-request-id') || undefined, estimated: true });
+        } else {
+          await ProviderBudgetService.recordUsage({ reservationId: reservationId!, syncJobId: job.id, resourcesRead: pageSize,
+            importedItems: 0, requestId: response.headers.get('x-request-id') || undefined, estimated: true });
+        }
         throw error;
       }
       const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string;
@@ -288,8 +316,16 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         }
       }
       // Persist provider cost before importing. If this fails, no item/credit transaction proceeds.
-      await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: tweets.length,
-        importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
+      if (budgetPreflightBypassed) {
+        e2eUsageEventId = await ProviderBudgetService.recordE2ETestUsage({ userId, syncJobId: job.id,
+          resourcesRead: tweets.length, importedItems: 0, providerStatus: response.status,
+          requestId: response.headers.get('x-request-id') || undefined });
+        console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId, budgetPreflightBypassed: true,
+          providerRequestAttempted: true, providerStatus: response.status, resourcesRead: tweets.length }));
+      } else {
+        await ProviderBudgetService.recordUsage({ reservationId: reservationId!, syncJobId: job.id, resourcesRead: tweets.length,
+          importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
+      }
       discovered += tweets.length;
       const authors = new Map((payload.includes?.users || []).map((author: any) => [author.id, author]));
       let pageAdded = 0;
@@ -307,7 +343,11 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
           if (result?.imported) { added++; pageAdded++; savedIds.push(result.item_id); }
         }
       } finally {
-        await ProviderBudgetService.updateImportedItems(reservationId, pageAdded, tweets.length);
+        if (budgetPreflightBypassed && e2eUsageEventId) {
+          await ProviderBudgetService.updateE2ETestImportedItems(e2eUsageEventId, pageAdded, tweets.length, response.status);
+        } else if (reservationId) {
+          await ProviderBudgetService.updateImportedItems(reservationId, pageAdded, tweets.length);
+        }
       }
       nextToken = processedTweets < tweets.length ? pageRequestToken || '__first__'
         : typeof payload.meta?.next_token === 'string' ? payload.meta.next_token : undefined;

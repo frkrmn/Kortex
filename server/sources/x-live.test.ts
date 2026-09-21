@@ -99,6 +99,11 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
       if (usage.length) usage[usage.length - 1].imported = body.imported_items;
       return Response.json({ id: 'usage-a' });
     }
+    if (url.pathname === '/rest/v1/provider_usage_events' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body));
+      usage.push({ resources: body.resources_read, imported: body.imported_items });
+      return Response.json({ id: `usage-e2e-${usage.length}` });
+    }
     if (url.pathname === '/rest/v1/provider_usage_events') return Response.json([]);
     if (url.pathname === '/rest/v1/import_analytics_events') return new Response(null, { status: 201 });
     if (url.pathname === '/rest/v1/rpc/grant_import_credits') return Response.json(10);
@@ -194,9 +199,35 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(historyBounded.hasMore, false);
     paginateProvider = false;
 
+    // Missing provider-budget configuration remains fail-closed for normal users.
+    const configuredBudget = {
+      X_POST_READ_ESTIMATED_COST: process.env.X_POST_READ_ESTIMATED_COST,
+      X_PRICING_VERSION: process.env.X_PRICING_VERSION,
+      X_API_MONTHLY_BUDGET: process.env.X_API_MONTHLY_BUDGET,
+      X_API_USER_MONTHLY_BUDGET: process.env.X_API_USER_MONTHLY_BUDGET,
+    };
+    delete process.env.X_POST_READ_ESTIMATED_COST;
+    delete process.env.X_PRICING_VERSION;
+    delete process.env.X_API_MONTHLY_BUDGET;
+    delete process.env.X_API_USER_MONTHLY_BUDGET;
+    providerTweets = [{ id: 'e2e-bypass', text: 'Controlled provider request', author_id: 'x-user-1' }];
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    const requestsBeforeBlockedUser = xRequests;
+    const blockedByMissingBudget = await syncLiveX('user-a');
+    assert.equal(blockedByMissingBudget.success, false);
+    assert.equal(blockedByMissingBudget.statusCode, 503);
+    assert.equal(xRequests, requestsBeforeBlockedUser);
+
+    // The internal flag reaches the real provider layer and preserves usage accounting.
+    const allowedE2E = await syncLiveX('user-a', { limit: 1, budgetPreflightBypassed: true });
+    assert.equal(allowedE2E.success, true);
+    assert.equal(xRequests, requestsBeforeBlockedUser + 1);
+    assert.deepEqual(usage.at(-1), { resources: 1, imported: 1 });
+    Object.assign(process.env, configuredBudget);
+
     bookmarksStatus = 402;
     savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
-    const paymentRequired = await syncLiveX('user-a');
+    const paymentRequired = await syncLiveX('user-a', { budgetPreflightBypassed: true });
     assert.equal(paymentRequired.success, false);
     assert.equal(paymentRequired.statusCode, 402);
     assert.match(paymentRequired.error, /temporarily unavailable/);

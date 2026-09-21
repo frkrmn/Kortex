@@ -9,6 +9,7 @@ import { importConfig, isImportPackKey } from './economics/config';
 import { LiveStripeService } from './economics/live-stripe';
 import { recordImportEvent } from './economics/analytics';
 import { economicsAdmin } from './economics/credit-service';
+import { isXSyncE2ETestUser } from './sources/x-e2e-allowlist';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -51,7 +52,12 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       if (limit !== undefined && (!Number.isSafeInteger(limit) || limit <= 0)) { res.status(400).json({ error: 'Invalid import limit.' }); return; }
       let result;
       try {
-        result = await syncLiveX(user.id, { limit, historical: Boolean(req.body?.historical), continueImport: req.body?.continueImport === true });
+        result = await syncLiveX(user.id, {
+          limit,
+          historical: Boolean(req.body?.historical),
+          continueImport: req.body?.continueImport === true,
+          budgetPreflightBypassed: isXSyncE2ETestUser(user),
+        });
       } catch (error) {
         console.error('X sync preflight/import failed:', error);
         res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Recallly library is still available.' });

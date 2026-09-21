@@ -81,6 +81,60 @@ export class ProviderBudgetService {
     if (error) throw error;
   }
 
+  static async recordE2ETestUsage(params: {
+    userId: string;
+    syncJobId: string;
+    resourcesRead: number;
+    importedItems: number;
+    providerStatus?: number;
+    requestId?: string;
+    estimated?: boolean;
+  }) {
+    const config = importConfig().x;
+    const unitCost = config.unitCost || 0;
+    const { data, error } = await economicsAdmin().from('provider_usage_events').insert({
+      user_id: params.userId,
+      provider: 'x',
+      operation: 'bookmark_sync',
+      resource_type: 'post',
+      resources_read: params.resourcesRead,
+      requests_made: 1,
+      estimated_unit_cost: unitCost,
+      estimated_cost: params.resourcesRead * unitCost,
+      pricing_version: config.pricingVersion === 'unconfigured' ? 'e2e-unconfigured' : config.pricingVersion,
+      provider_request_id: params.requestId || null,
+      sync_job_id: params.syncJobId,
+      imported_items: params.importedItems,
+      metadata: {
+        e2e_test: true,
+        budget_preflight_bypassed: true,
+        provider_status: params.providerStatus ?? null,
+        count_estimated: Boolean(params.estimated),
+      },
+    }).select('id').single();
+    if (error) throw error;
+    return data.id as string;
+  }
+
+  static async updateE2ETestImportedItems(
+    usageEventId: string,
+    importedItems: number,
+    resourcesRead: number,
+    providerStatus: number,
+  ) {
+    const { error } = await economicsAdmin().from('provider_usage_events').update({
+      imported_items: importedItems,
+      metadata: {
+        e2e_test: true,
+        budget_preflight_bypassed: true,
+        provider_status: providerStatus,
+        count_estimated: false,
+        zero_yield: resourcesRead > 0 && importedItems === 0,
+      },
+    }).eq('id', usageEventId).select('id').single();
+    if (error) throw error;
+  }
+
   static async getBudgetState() {
     const config = importConfig().x;
     const usage = await this.getMonthlySpend('x');

@@ -479,10 +479,14 @@ export const OnboardingView: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-[#70706B] mt-0.5">
-                      Read-only access (bookmark.read, tweet.read). We never post or write.
+                      Bring your recent X bookmarks into Recallly and keep your library in sync going forward.
                     </p>
                   </div>
                 </div>
+
+                <p className="text-[11px] text-[#70706B] leading-relaxed">
+                  Recallly uses the official X API with read-only access. X limits how much historical bookmark data third-party apps can retrieve.
+                </p>
 
                 <div className="space-y-2">
                   <button
@@ -499,7 +503,7 @@ export const OnboardingView: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <span>Connect X Account</span>
+                        <span>Connect X</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </>
                     )}

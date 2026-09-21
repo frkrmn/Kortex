@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
+import { DEFAULT_TRIAL_DAYS } from '../config/plans';
 
 interface AppSidebarProps {
   onOpenSearch: () => void;
@@ -180,11 +181,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
                 Upgrade to Pro
               </span>
               <span className="text-[9px] font-bold text-[#1D4ED8] bg-white/80 px-1.5 py-0.5 rounded shadow-2xs">
-                14d Trial
+                {DEFAULT_TRIAL_DAYS}d Trial
               </span>
             </div>
             <p className="text-[10px] text-[#3B82F6] mt-1 leading-tight">
-              Unlimited saves, 768-dim hybrid search & weekly digests.
+              Automatic X sync, semantic search & weekly digests.
             </p>
           </button>
         )}

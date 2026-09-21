@@ -41,7 +41,7 @@ export const TermsView: React.FC = () => {
           </p>
           <h2 className="text-sm font-bold text-[#171717] pt-2">3. Subscription & Billing</h2>
           <p>
-            Paid subscriptions provide enhanced features including real-time AI summaries and conversational synthesis. You may export your entire library at any time.
+            Paid subscriptions provide enhanced features including AI summaries and conversational synthesis. You may export your Recallly library at any time.
           </p>
         </div>
       </div>

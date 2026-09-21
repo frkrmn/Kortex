@@ -1,3 +1,5 @@
+import { DEFAULT_X_BOOKMARK_HISTORY_LIMIT } from '../../src/config/plans';
+
 // Commercial values are deployment configuration, never client-supplied amounts.
 const integer = (name: string) => {
   const raw = process.env[name];
@@ -15,7 +17,7 @@ const percent = (name: string, fallback: number) => Math.min(100, Math.max(1, in
 // X's public API reference documents page size and pagination but no total
 // bookmark-history ceiling. This deployment setting is our conservative product
 // boundary and must be revisited when X publishes an official total limit.
-const bookmarkHistoryLimit = () => Math.min(10_000, integer('X_BOOKMARK_HISTORY_LIMIT') || 800);
+const bookmarkHistoryLimit = () => Math.min(10_000, integer('X_BOOKMARK_HISTORY_LIMIT') || DEFAULT_X_BOOKMARK_HISTORY_LIMIT);
 
 export const importConfig = () => ({
   signupCredits: integer('FREE_SIGNUP_IMPORT_CREDITS'),

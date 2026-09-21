@@ -28,6 +28,7 @@ import {
   DigestGenerationOptions,
 } from './intelligence/types';
 import { JobQueueRecord, EmailDeliveryRecord } from './background/types';
+import { DEFAULT_TRIAL_DAYS, PLANS } from '../src/config/plans';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_FILE = path.join(DATA_DIR, 'kortex-store.json');
@@ -569,9 +570,9 @@ export class AppStore {
         provider: 'stripe',
         status: 'trialing',
         plan: 'pro',
-        current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
-        trial_days_left: 7,
-        price_monthly: 9,
+        current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * DEFAULT_TRIAL_DAYS).toISOString(),
+        trial_days_left: DEFAULT_TRIAL_DAYS,
+        price_monthly: PLANS.pro.prices.monthly.amount,
       },
       syncProgress: {
         isSyncing: false,
@@ -1313,10 +1314,10 @@ export class AppStore {
           status: 'trialing',
           plan: 'free',
           interval: 'monthly',
-          price_monthly: 9,
-          trial_days_left: 7,
+          price_monthly: PLANS.free.prices.monthly.amount,
+          trial_days_left: DEFAULT_TRIAL_DAYS,
           current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+          current_period_end: new Date(Date.now() + 1000 * 60 * 60 * 24 * DEFAULT_TRIAL_DAYS).toISOString(),
         };
       }
       this.persist();

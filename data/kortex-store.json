@@ -1011,11 +1011,9 @@
     "plan": "pro",
     "current_period_end": "2026-10-18T07:56:41.989Z",
     "trial_days_left": 7,
-    "price_monthly": 9,
     "interval": "yearly",
     "cancel_at_period_end": false,
     "current_period_start": "2026-09-18T07:56:41.989Z",
-    "price_yearly": 84,
     "has_used_trial": true
   },
   "syncProgress": {

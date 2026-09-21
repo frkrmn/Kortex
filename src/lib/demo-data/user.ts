@@ -1,4 +1,5 @@
 import { UserProfile, ConnectedAccount, Subscription, DigestSettings } from '../../types';
+import { DEFAULT_TRIAL_DAYS } from '../../config/plans';
 
 export const demoUser: UserProfile = {
   id: 'user_faruk',
@@ -70,8 +71,7 @@ export const demoSubscription: Subscription = {
   status: 'trialing',
   plan: 'free_trial',
   current_period_end: '2026-10-15T00:00:00Z',
-  trial_days_left: 7,
-  price_monthly: 19,
+  trial_days_left: DEFAULT_TRIAL_DAYS,
 };
 
 export const demoDigestSettings: DigestSettings = {

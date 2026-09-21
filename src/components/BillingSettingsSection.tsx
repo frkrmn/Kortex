@@ -27,6 +27,7 @@ import { api } from '../lib/api';
 import { Subscription, EntitlementData } from '../types';
 import { useDemoStore } from '../lib/store/demo-store';
 import { UpgradeModal } from './UpgradeModal';
+import { DEFAULT_TRIAL_DAYS, PLANS } from '../config/plans';
 
 export const BillingSettingsSection: React.FC = () => {
   const { showToast, profile, updateProfile } = useDemoStore();
@@ -37,9 +38,6 @@ export const BillingSettingsSection: React.FC = () => {
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [wallet, setWallet] = useState<Awaited<ReturnType<typeof api.getImportCredits>> | null>(null);
-  const [packs, setPacks] = useState<Array<{ key: string; credits: number }>>([]);
-  const [proMonthlyImports, setProMonthlyImports] = useState(0);
 
   // Check URL parameters for checkout results
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
@@ -53,11 +51,6 @@ export const BillingSettingsSection: React.FC = () => {
       ]);
       setSubscription(subData);
       setEntitlements(entData);
-      if ((import.meta as any).env.VITE_DEMO_MODE === 'false') {
-        const [creditData, packData] = await Promise.all([api.getImportCredits(), api.getImportPacks()]);
-        setWallet(creditData); setPacks(packData.packs); setProMonthlyImports(packData.proMonthlyImports);
-      }
-
       if (profile && profile.plan !== subData.plan) {
         updateProfile({ plan: subData.plan === 'pro' ? 'pro' : 'starter' });
       }
@@ -74,7 +67,7 @@ export const BillingSettingsSection: React.FC = () => {
     // Check query params
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') === 'success') {
-      setCheckoutNotice('Checkout completed. Your balance updates after payment confirmation.');
+      setCheckoutNotice('Checkout completed. Your plan updates after payment confirmation.');
     } else if (params.get('checkout') === 'cancel') {
       setCheckoutNotice('Checkout was cancelled. Your current plan was not changed.');
     } else if (params.get('portal') === 'simulated') {
@@ -130,42 +123,16 @@ export const BillingSettingsSection: React.FC = () => {
   const isPastDue = subscription?.status === 'past_due';
   const isCanceled = subscription?.status === 'canceled' || subscription?.cancel_at_period_end;
 
-  const bookmarksLimit = entitlements?.limits?.bookmarks ?? (entitlements?.limits as any)?.maxBookmarks ?? (isPro ? null : 250);
-  const isBookmarksUnlimited = bookmarksLimit === null || bookmarksLimit === -1;
-  const bookmarksCount = entitlements?.usage?.bookmarksCount ?? 0;
-
-  const enrichmentLimit = entitlements?.limits?.monthlyEnrichment ?? (entitlements?.limits as any)?.monthlyEnrichmentQuota ?? (isPro ? 300 : 25);
+  const enrichmentLimit = entitlements?.limits?.monthlyEnrichment ?? (entitlements?.limits as any)?.monthlyEnrichmentQuota ?? PLANS[isPro ? 'pro' : 'free'].limits.monthlyEnrichmentLimit;
   const isEnrichmentUnlimited = enrichmentLimit === null || enrichmentLimit === -1;
   const enrichmentCount = entitlements?.usage?.monthlyEnrichmentCount ?? (entitlements?.usage as any)?.monthlyEnrichmentUsed ?? 0;
 
-  const askLimit = entitlements?.limits?.monthlyAsk ?? (entitlements?.limits as any)?.monthlyAskQuota ?? (isPro ? 150 : 10);
+  const askLimit = entitlements?.limits?.monthlyAsk ?? (entitlements?.limits as any)?.monthlyAskQuota ?? PLANS[isPro ? 'pro' : 'free'].limits.monthlyAskLimit;
   const isAskUnlimited = askLimit === null || askLimit === -1;
   const askCount = entitlements?.usage?.monthlyAskCount ?? (entitlements?.usage as any)?.monthlyAskUsed ?? 0;
 
   return (
     <div className="space-y-6" id="billing-settings-container">
-      {(import.meta as any).env.VITE_DEMO_MODE === 'false' && (
-        <section className="rounded-2xl border border-[#E0E0DC] bg-white p-5 space-y-4">
-          <h3 className="text-lg font-bold">Import Credits</h3>
-          <p className="text-sm">{wallet ? `${wallet.availableCredits.toLocaleString()} imports remaining` : 'Credit balance unavailable'}</p>
-          {wallet && <p className="text-xs text-[#70706B]">Monthly remaining: {wallet.monthlyCredits.toLocaleString()} · Other included: {(wallet.includedCredits - wallet.monthlyCredits).toLocaleString()} · Purchased: {wallet.purchasedCredits.toLocaleString()}</p>}
-          {isPro && <p className="text-xs text-[#70706B]">Monthly Pro allowance: {proMonthlyImports.toLocaleString()} imports. Next allowance if Pro remains active: {wallet?.nextMonthlyAllowanceAt ? new Date(wallet.nextMonthlyAllowanceAt).toLocaleDateString() : 'unavailable'}.</p>}
-          <p className="text-xs text-[#70706B]">Credits are used only when new items are added. Previously imported items do not consume credits again. Purchased credits do not expire.</p>
-          <div className="flex flex-wrap gap-2">
-            {packs.map(pack => <button key={pack.key} type="button" onClick={async () => {
-              try { const checkout = await api.buyImportPack(pack.key); window.location.href = checkout.url; }
-              catch (error: any) { showToast(error.message || 'Checkout unavailable.'); }
-            }} className="rounded-xl border border-[#E0E0DC] px-4 py-2 text-xs font-semibold hover:bg-[#FAFAF8]">
-              Add {pack.credits.toLocaleString()} imports
-            </button>)}
-          </div>
-          {wallet?.transactions?.length ? <div className="space-y-1 text-xs text-[#70706B]">
-            {wallet.transactions.slice(0, 5).map((entry, index) => <p key={index}>
-              {new Date(entry.created_at).toLocaleDateString()} · {entry.type.replaceAll('_', ' ')} · {entry.balance_delta > 0 ? '+' : ''}{entry.balance_delta}
-            </p>)}
-          </div> : null}
-        </section>
-      )}
       {/* Checkout Return Notice */}
       {checkoutNotice && (
         <div
@@ -300,10 +267,8 @@ export const BillingSettingsSection: React.FC = () => {
             </div>
             <p className="text-xs text-[#70706B] mt-1">
               {isPro
-                ? `Recallly Pro (${subscription?.interval || 'monthly'}) — $${
-                    subscription?.interval === 'yearly' ? '99/year' : '12/month'
-                  }`
-                : 'Free Tier — 250 bookmarks, basic lexical search, and 10 Ask Recallly questions per month.'}
+                ? `Recallly Pro (${subscription?.interval || 'monthly'}) — automatic X sync and full intelligence features.`
+                : `Free — manual X sync, library organization, and ${PLANS.free.limits.monthlyAskLimit} Ask Recallly questions per month.`}
             </p>
           </div>
 
@@ -356,11 +321,6 @@ export const BillingSettingsSection: React.FC = () => {
               </span>
             </div>
 
-            {subscription.customer_id && (
-              <div className="text-[11px] text-[#8A8A85]">
-                Stripe Customer: <code className="font-mono">{subscription.customer_id}</code>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -368,14 +328,14 @@ export const BillingSettingsSection: React.FC = () => {
       {/* 2. Authoritative In-App Usage Meters */}
       <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-5">
         <div>
-          <h2 className="text-sm font-bold text-[#171717]">Usage & Quota Entitlements</h2>
+          <h2 className="text-sm font-bold text-[#171717]">Plan & Usage</h2>
           <p className="text-xs text-[#70706B] mt-0.5">
-            Real-time usage tracked by the authoritative Recallly Entitlement Engine.
+            Features and AI usage for your current billing period.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Meter 1: Bookmarks Count */}
+          {/* X sync entitlement */}
           <div
             id="meter-bookmarks-card"
             className="p-4 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-3"
@@ -383,39 +343,13 @@ export const BillingSettingsSection: React.FC = () => {
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5 font-bold text-[#171717]">
                 <Layers className="w-4 h-4 text-[#2563EB]" />
-                <span>Saved Bookmarks</span>
+                <span>X Bookmark Sync</span>
               </div>
-              <span className="text-[11px] font-semibold text-[#70706B]">
-                {isBookmarksUnlimited ? (
-                  <span className="text-emerald-800 font-bold">Unlimited</span>
-                ) : (
-                  `${bookmarksCount} / ${bookmarksLimit}`
-                )}
-              </span>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-[#E5E5E0] h-2 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  isBookmarksUnlimited
-                    ? 'bg-emerald-500 w-1/4'
-                    : bookmarksCount >= (bookmarksLimit || 250)
-                    ? 'bg-rose-500 w-full'
-                    : 'bg-[#2563EB]'
-                }`}
-                style={{
-                  width: isBookmarksUnlimited
-                    ? '35%'
-                    : `${Math.min(100, Math.round((bookmarksCount / (bookmarksLimit || 250)) * 100))}%`,
-                }}
-              />
+              <span className="text-[11px] font-semibold text-emerald-800">{isPro ? 'Automatic' : 'Manual'}</span>
             </div>
 
             <p className="text-[11px] text-[#8A8A85]">
-              {isBookmarksUnlimited
-                ? 'Unlimited capacity for your whole digital archive.'
-                : `${Math.max(0, (bookmarksLimit || 250) - bookmarksCount)} saves left on Free plan.`}
+              {isPro ? 'Automatic X bookmark sync is included with Pro.' : 'Use Sync now to check for new X bookmarks.'}
             </p>
           </div>
 
@@ -456,7 +390,7 @@ export const BillingSettingsSection: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-[#8A8A85]">
-              {isPro ? `${enrichmentLimit || 300} enrichments / mo on Pro.` : '25 initial enrichments on Free.'}
+              {isEnrichmentUnlimited ? 'AI enrichment is included with Pro.' : `${enrichmentLimit} enrichments available.`}
             </p>
           </div>
 
@@ -497,7 +431,7 @@ export const BillingSettingsSection: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-[#8A8A85]">
-              {isPro ? `${askLimit || 150} grounded RAG queries / mo on Pro.` : '10 questions / mo on Free.'}
+              {isAskUnlimited ? 'Ask Recallly is included with Pro.' : `${askLimit} grounded questions per month.`}
             </p>
           </div>
         </div>
@@ -511,11 +445,11 @@ export const BillingSettingsSection: React.FC = () => {
             </div>
             {entitlements?.features.semanticSearch ? (
               <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                <Check className="w-3 h-3 text-emerald-600" /> Active (768-dim)
+                <Check className="w-3 h-3 text-emerald-600" /> Active
               </span>
             ) : (
               <span className="text-[11px] font-medium text-[#70706B] bg-[#E8E8E5] px-2 py-0.5 rounded">
-                Lexical Only (Pro required)
+                Keyword search
               </span>
             )}
           </div>
@@ -591,7 +525,7 @@ export const BillingSettingsSection: React.FC = () => {
                 : 'bg-white text-[#171717] border-[#D1D1CB] hover:bg-[#F2F2EE]'
             }`}
           >
-            Switch to Pro (14-Day Trial)
+            Switch to Pro ({DEFAULT_TRIAL_DAYS}-Day Trial)
           </button>
 
           <button

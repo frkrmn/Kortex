@@ -15,6 +15,7 @@ import {
   Lock,
   ExternalLink,
 } from 'lucide-react';
+import { DEFAULT_TRIAL_DAYS, DEFAULT_X_BOOKMARK_HISTORY_LIMIT, PLANS, X_HISTORY_EXPLANATION } from '../config/plans';
 
 interface LandingPageProps {
   onEnterApp: () => void;
@@ -29,6 +30,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const faqs = [
     {
+      q: 'How many X bookmarks can Recallly import?',
+      a: `${X_HISTORY_EXPLANATION} The current product safeguard is approximately the latest ${DEFAULT_X_BOOKMARK_HISTORY_LIMIT.toLocaleString()} bookmarks. Once connected, Recallly can continue syncing new bookmarks so your library keeps growing over time.`,
+    },
+    {
+      q: 'Will Recallly keep syncing new bookmarks?',
+      a: 'Yes. Pro includes automatic X bookmark sync. Free uses manual sync. Provider availability and rate limits can temporarily delay a sync.',
+    },
+    {
+      q: 'Can my Recallly library grow beyond the initial import window?',
+      a: 'Yes. The historical window applies only to bookmarks X makes available during the initial import. New bookmarks can continue being added after you connect your account.',
+    },
+    {
+      q: 'What happens if an X post is deleted?',
+      a: 'If a post becomes unavailable on X, Recallly may mark the original content as unavailable. Your Recallly organization, such as collections and notes, can remain where appropriate.',
+    },
+    {
       q: 'What permissions does Recallly request from my X account?',
       a: 'We only request read-only permissions (bookmark.read and tweet.read). We cannot post tweets, send direct messages, follow accounts, or access your password. Your account remains 100% under your control.',
     },
@@ -42,11 +59,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     },
     {
       q: 'Can I export my data if I want to leave?',
-      a: 'Absolutely. You can export your entire library, including all original tweets, AI summaries, collections, and digests, as a single structured JSON file with one click at any time.',
+      a: 'You can export your Recallly library, including available saved content, AI summaries, collections, and digests, as structured JSON.',
     },
     {
       q: 'What is included in the 7-day free trial?',
-      a: 'You get full, unrestricted access to the Pro tier: unlimited bookmark imports, real-time AI summarization, weekly digests, and unlimited conversational queries with Ask AI. No lock-in, cancel anytime.',
+      a: 'The trial includes Pro features such as automatic X bookmark sync, AI organization, semantic search, Ask Recallly, insights, and weekly digests. Current pricing and trial terms are shown in Stripe Checkout.',
     },
   ];
 
@@ -109,7 +126,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             onClick={onStartOnboarding}
             className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-[#FAFAF8] text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-xs"
           >
-            <span>Start 7-day free trial</span>
+            <span>Try Pro free for {DEFAULT_TRIAL_DAYS} days</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
@@ -239,7 +256,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="font-semibold text-sm text-[#171717]">Connect in 30 Seconds</h3>
             <p className="text-xs text-[#70706B] leading-relaxed">
-              Authenticate securely via read-only OAuth 2.0. We fetch your existing archive and stay automatically in sync.
+              Connect through read-only OAuth, import the recent bookmarks X makes available, and keep new bookmarks syncing with Pro.
             </p>
           </div>
 
@@ -249,7 +266,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="font-semibold text-sm text-[#171717]">AI Organizes & Indexes</h3>
             <p className="text-xs text-[#70706B] leading-relaxed">
-              Every bookmark receives automatic topic tags, a 1-sentence executive takeaway, and deep vector embeddings.
+              Recallly can add topic tags, concise takeaways, and semantic indexing according to your plan.
             </p>
           </div>
 
@@ -318,7 +335,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <h2 className="text-3xl font-bold tracking-tight text-[#171717]">
             Transparent pricing for serious curators.
           </h2>
-          <p className="text-xs text-[#70706B]">No hidden charges. 14-day free trial on Pro. Cancel anytime.</p>
+          <p className="text-xs text-[#70706B]">Start free. Review current Pro pricing and trial terms in checkout.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto text-left">
@@ -328,7 +345,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex items-baseline justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-[#171717]">Free</h3>
-                  <p className="text-xs text-[#70706B]">Essential bookmark organization</p>
+                  <p className="text-xs text-[#70706B]">For getting started with your X bookmarks</p>
                 </div>
                 <div className="text-right">
                   <span className="text-3xl font-bold text-[#171717]">$0</span>
@@ -339,23 +356,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="space-y-2.5 text-xs text-[#52524E]">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>Up to 250 saved bookmarks</span>
+                  <span>Connect your X account</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>Official X (Twitter) OAuth sync</span>
+                  <span>Import your recent X bookmarks</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>Fast lexical keyword search</span>
+                  <span>Manual X bookmark sync</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>10 Ask Recallly AI questions / mo</span>
+                  <span>Search and organize your library</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>25 initial AI bookmark enrichments</span>
+                  <span>Create collections and try Recallly AI</span>
                 </div>
               </div>
             </div>
@@ -372,46 +389,45 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Pro Tier */}
           <div className="p-8 rounded-3xl bg-[#FFFFFF] border-2 border-[#171717] shadow-xl space-y-6 flex flex-col justify-between relative overflow-hidden">
             <div className="absolute top-0 right-0 px-3 py-1 bg-[#171717] text-white text-[10px] font-bold uppercase tracking-wider rounded-bl-xl">
-              14-Day Free Trial
+              {DEFAULT_TRIAL_DAYS}-Day Free Trial
             </div>
 
             <div className="space-y-4">
               <div className="flex items-baseline justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-[#171717]">Recallly Pro</h3>
-                  <p className="text-xs text-[#70706B]">Full personal second brain</p>
+                  <p className="text-xs text-[#70706B]">Your X knowledge library, continuously organized</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-3xl font-bold text-[#171717]">$12</span>
-                  <span className="text-xs text-[#8A8A85]"> / month</span>
-                  <div className="text-[10px] text-emerald-700 font-medium">$99/yr billed annually</div>
+                  <span className="text-2xl font-bold text-[#171717]">{PLANS.pro.prices.monthly.formatted}</span>
+                  <div className="text-[10px] text-emerald-700 font-medium">Monthly or annual billing</div>
                 </div>
               </div>
 
               <div className="space-y-2.5 text-xs text-[#171717]">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-semibold">Unlimited bookmarks archive</span>
+                  <span className="font-semibold">Import the latest bookmarks available from X</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>768-dim hybrid semantic search</span>
+                  <span>Automatic X bookmark sync</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>150 Ask Recallly RAG questions / mo</span>
+                  <span>AI-powered organization and semantic search</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>300 AI enrichments & summaries / mo</span>
+                  <span>Ask Recallly across your library</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Automated weekly intelligence digests</span>
+                  <span>Insights, rediscovery, and weekly digests</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Shareable public collections & full JSON export</span>
+                  <span>Smart collections and data export</span>
                 </div>
               </div>
             </div>
@@ -421,13 +437,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={onStartOnboarding}
               className="w-full py-3 rounded-xl bg-[#171717] hover:bg-[#333333] text-[#FFFFFF] text-xs font-bold transition-all text-center block shadow-xs cursor-pointer"
             >
-              Start 14-Day Free Trial
+              Upgrade to Pro
             </button>
           </div>
         </div>
 
         <p className="text-[11px] text-center text-[#8A8A85]">
           Powered by Stripe • No commitment • Downgrading never deletes your bookmarks or summaries
+        </p>
+        <p className="text-[11px] text-center text-[#70706B] max-w-xl mx-auto">
+          {X_HISTORY_EXPLANATION} Once connected, ongoing sync lets your Recallly library continue growing.
         </p>
       </section>
 

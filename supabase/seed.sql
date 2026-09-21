@@ -303,7 +303,7 @@ BEGIN
     'stripe',
     'free_trial',
     'trialing',
-    NOW() + INTERVAL '14 days'
+    NOW() + INTERVAL '7 days'
   )
   ON CONFLICT (user_id) DO NOTHING;
 

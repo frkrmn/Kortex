@@ -354,7 +354,7 @@ export class StripeService {
       status,
       interval,
       cancel_at_period_end: false,
-      trial_days_left: status === 'trialing' ? 7 : 0,
+      trial_days_left: status === 'trialing' ? DEFAULT_TRIAL_DAYS : 0,
       current_period_start: new Date().toISOString(),
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       price_monthly: isPro ? PLANS.pro.prices.monthly.amount : 0,

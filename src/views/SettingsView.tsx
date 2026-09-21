@@ -453,7 +453,7 @@ export const SettingsView: React.FC = () => {
                           <span className="font-medium text-[#171717]">@{xStatus.username}</span> • Last synchronized {formatLastSync(xStatus.last_successful_sync || xStatus.last_sync_at)}
                         </>
                       ) : (
-                        'Connect X to import bookmarks with Import Credits.'
+                        'Connect X to import recent bookmarks and keep your library in sync.'
                       )}
                     </p>
                   </div>
@@ -529,7 +529,7 @@ export const SettingsView: React.FC = () => {
               {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && xStatus.initialImport && (
                 <div className="pt-3 border-t border-[#E8E8E5] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   <div><span className="text-[#70706B]">Historical import</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.importedCount.toLocaleString()} imported</p></div>
-                  <div><span className="text-[#70706B]">Ongoing sync</span><p className="font-semibold text-[#171717]">{(xStatus.ongoingImportedCount || 0).toLocaleString()} captured since</p></div>
+                  <div><span className="text-[#70706B]">Ongoing sync</span><p className="font-semibold text-[#171717]">{(xStatus.ongoingImportedCount || 0).toLocaleString()} synced since connecting</p></div>
                   <div><span className="text-[#70706B]">Status</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.limitReached ? 'Historical API window reached' : xStatus.initialImport.completedAt ? 'Historical import complete' : 'Import pending'}</p></div>
                   {xStatus.initialImport.limitReached && <p className="sm:col-span-3 text-[#70706B]">X currently makes only its most recent bookmarks available through the official API. New bookmarks will continue syncing.</p>}
                 </div>

@@ -46,6 +46,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
   const proPlan = PLANS.pro;
   const price = proPlan.prices[interval];
+  const hasDisplayPrice = price.amount > 0;
 
   const handleCheckout = async () => {
     setIsLoading(true);
@@ -115,10 +116,10 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </div>
             <div>
               <h2 id="upgrade-modal-title" className="text-xl font-bold tracking-tight text-[#171717]">
-                Upgrade to Recallly Pro
+                Keep your knowledge library working for you
               </h2>
               <p className="text-xs text-[#70706B] mt-0.5">
-                Unlock your personal second brain with unlimited bookmarks, deep hybrid search, and automated digests.
+                Upgrade to Pro for automatic sync and Recallly's complete intelligence experience.
               </p>
             </div>
           </div>
@@ -136,7 +137,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     : 'text-[#70706B] hover:text-[#171717]'
                 }`}
               >
-                Monthly ({PLANS.pro.prices.monthly.formatted}/mo)
+                {PLANS.pro.prices.monthly.amount > 0 ? `Monthly (${PLANS.pro.prices.monthly.formatted}/mo)` : 'Monthly'}
               </button>
               <button
                 type="button"
@@ -148,7 +149,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     : 'text-[#70706B] hover:text-[#171717]'
                 }`}
               >
-                <span>Yearly ({PLANS.pro.prices.yearly.formatted}/yr)</span>
+                <span>{PLANS.pro.prices.yearly.amount > 0 ? `Yearly (${PLANS.pro.prices.yearly.formatted}/yr)` : 'Yearly'}</span>
               </button>
             </div>
           </div>
@@ -166,40 +167,40 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <div className="p-3.5 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-[#171717]">
                 <Layers className="w-4 h-4 text-[#2563EB]" />
-                <span>Unlimited Knowledge Base</span>
+                <span>Automatic X Bookmark Sync</span>
               </div>
               <p className="text-[11px] text-[#70706B] leading-relaxed">
-                Save unlimited bookmarks from X and the web. Never worry about reaching the 250-item Free limit.
+                Keep adding new X bookmarks after your initial import without running manual syncs.
               </p>
             </div>
 
             <div className="p-3.5 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-[#171717]">
                 <Search className="w-4 h-4 text-[#2563EB]" />
-                <span>Hybrid Semantic Search</span>
+                <span>Semantic Search</span>
               </div>
               <p className="text-[11px] text-[#70706B] leading-relaxed">
-                Full 768-dim embeddings with Reciprocal Rank Fusion. Find bookmarks by meaning, even without exact keywords.
+                Find bookmarks by meaning even when you cannot remember the exact words.
               </p>
             </div>
 
             <div className="p-3.5 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-[#171717]">
                 <MessageSquare className="w-4 h-4 text-[#2563EB]" />
-                <span>Ask Recallly (150 Qs/mo)</span>
+                <span>Ask Recallly</span>
               </div>
               <p className="text-[11px] text-[#70706B] leading-relaxed">
-                Production multi-stage RAG synthesizes verified answers strictly grounded in your library with citations.
+                Ask questions across your library and receive grounded answers with citations.
               </p>
             </div>
 
             <div className="p-3.5 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-[#171717]">
                 <Sparkles className="w-4 h-4 text-[#2563EB]" />
-                <span>Weekly AI Digests</span>
+                <span>Insights, Rediscovery & Digests</span>
               </div>
               <p className="text-[11px] text-[#70706B] leading-relaxed">
-                Automated weekly synthesis of your saves into executive summaries, action items, and cross-topic patterns.
+                Resurface useful ideas and receive weekly synthesis across your saved knowledge.
               </p>
             </div>
           </div>
@@ -209,9 +210,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-[#171717]">
-                  {price.formatted}
+                  {hasDisplayPrice ? price.formatted : 'Current price in checkout'}
                 </span>
-                <span className="text-xs text-[#70706B]">{interval === 'yearly' ? '/ year' : '/ month'}</span>
+                {hasDisplayPrice && <span className="text-xs text-[#70706B]">{interval === 'yearly' ? '/ year' : '/ month'}</span>}
                 {interval === 'yearly' && <span className="text-[11px] text-[#70706B]">Billed annually</span>}
               </div>
               <p className="text-xs text-[#2563EB] font-medium mt-0.5 flex items-center gap-1.5">
@@ -234,7 +235,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                 </>
               ) : (
                 <>
-                  <span>Review Pro Checkout</span>
+                  <span>Upgrade to Pro</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

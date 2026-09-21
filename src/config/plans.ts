@@ -16,6 +16,10 @@ export type SubscriptionStatus =
   | 'incomplete_expired'
   | 'paused';
 
+export const DEFAULT_X_BOOKMARK_HISTORY_LIMIT = 800;
+export const X_HISTORY_EXPLANATION =
+  "Recallly imports the most recent bookmarks made available through X's official API. Older bookmarks may not be accessible during your initial import.";
+
 export interface PlanLimits {
   bookmarkLimit: number | null; // null = unlimited
   monthlyAskLimit: number | null;
@@ -66,7 +70,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     id: 'free',
     name: 'Free',
     tagline: 'Experience personal recall',
-    description: 'Connect X and import bookmarks with complimentary credits.',
+    description: 'For getting started with your X bookmarks.',
     prices: {
       monthly: {
         amount: 0,
@@ -83,7 +87,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       },
     },
     limits: {
-      bookmarkLimit: null, // Import Credits now govern new external knowledge.
+      bookmarkLimit: null, // X history is limited by provider availability, not a Recallly storage quota.
       monthlyAskLimit: 10,
       monthlyEnrichmentLimit: 25,
       syncAccountLimit: 1,
@@ -98,7 +102,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       exportData: true,
     },
     marketingHighlights: [
-      'Import new bookmarks with Import Credits',
+      'Connect X and import recent bookmarks',
+      'Manual X bookmark sync',
       '10 Ask Recallly AI questions / month',
       '25 AI-enriched bookmarks with key takeaways',
       'Fast lexical search & topic categorization',
@@ -109,8 +114,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    tagline: 'Your complete knowledge brain',
-    description: 'Unlimited bookmarks, hybrid vector search, weekly digests, and advanced insights.',
+    tagline: 'Your X knowledge library, continuously organized',
+    description: 'Automatic X bookmark sync, semantic search, weekly digests, and advanced insights.',
     badge: 'Most Popular',
     prices: {
       monthly: {
@@ -143,7 +148,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       exportData: true,
     },
     marketingHighlights: [
-      'Automatic Smart Sync with included monthly imports',
+      'Import the latest bookmarks available from X',
+      'Automatic X bookmark sync',
       '500 Ask Recallly conversational AI queries / month',
       'Unlimited AI summaries & keyword tagging',
       'Hybrid semantic vector search (RRF)',

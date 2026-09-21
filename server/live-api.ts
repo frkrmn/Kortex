@@ -92,7 +92,8 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       if (error) throw error;
       const account = data ? mapConnectedAccountSafeToAccount(data) : null;
       const { data: importState, error: importStateError } = await economicsAdmin().from('connected_accounts')
-        .select('sync_cursor').eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
+        .select('sync_cursor,initial_import_started_at,initial_import_completed_at,initial_import_count,initial_import_limit,historical_limit_reached,ongoing_sync_import_count,last_error_message,reauthorization_required')
+        .eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
       if (importStateError) throw importStateError;
       res.json({
         connected: Boolean(account?.connected), username: account?.username || '',
@@ -100,6 +101,17 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         last_sync_at: account?.last_sync_at, last_successful_sync: account?.last_successful_sync,
         sync_status: account?.sync_status || 'idle', configured: isLiveXConfigured(),
         hasPendingImport: Boolean(importState?.sync_cursor),
+        initialImport: {
+          startedAt: importState?.initial_import_started_at || null,
+          completedAt: importState?.initial_import_completed_at || null,
+          importedCount: importState?.initial_import_count || 0,
+          limit: importState?.initial_import_limit || null,
+          limitReached: Boolean(importState?.historical_limit_reached),
+        },
+        ongoingImportedCount: importState?.ongoing_sync_import_count || 0,
+        lastSyncError: importState?.last_error_message || null,
+        reauthorizationRequired: Boolean(importState?.reauthorization_required),
+        reauthorization_required: Boolean(importState?.reauthorization_required),
         redirectUri: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/integrations/x/callback` : null,
       });
       return;

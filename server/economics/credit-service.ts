@@ -66,6 +66,23 @@ export class CreditService {
     return (data as Array<{ imported: boolean; charged: boolean; item_id: string }>)[0];
   }
 
+  // X bookmark imports are included with the plan. Credit balances remain an
+  // independent generic commercial mechanism and are never spent by X sync.
+  static async importXUnmetered(userId: string, externalId: string, row: Record<string, unknown>, jobId: string) {
+    const { data, error } = await economicsAdmin().rpc('import_x_saved_item_unmetered', {
+      p_user_id: userId, p_external_id: externalId, p_row: row, p_sync_job_id: jobId,
+    });
+    if (error) throw error;
+    return (data as Array<{ imported: boolean; item_id: string }>)[0];
+  }
+
+  static async markXUnavailable(userId: string, externalId: string, status: 'unavailable'|'deleted'|'restricted'|'unknown') {
+    const { error } = await economicsAdmin().rpc('mark_x_content_unavailable', {
+      p_user_id: userId, p_external_id: externalId, p_status: status,
+    });
+    if (error) throw error;
+  }
+
   static async wallet(userId: string) {
     const db = economicsAdmin();
     const [balance, grants, ledger] = await Promise.all([

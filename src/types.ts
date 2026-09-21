@@ -40,6 +40,7 @@ export interface Bookmark {
     replies?: number;
   };
   embedding?: number[];
+  external_content_status?: 'available' | 'unavailable' | 'deleted' | 'restricted' | 'unknown';
 }
 
 export interface Topic {

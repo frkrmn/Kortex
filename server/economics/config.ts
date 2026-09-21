@@ -12,6 +12,10 @@ const money = (name: string) => {
   return Number.isFinite(value) ? value : 0;
 };
 const percent = (name: string, fallback: number) => Math.min(100, Math.max(1, integer(name) || fallback));
+// X's public API reference documents page size and pagination but no total
+// bookmark-history ceiling. This deployment setting is our conservative product
+// boundary and must be revisited when X publishes an official total limit.
+const bookmarkHistoryLimit = () => Math.min(10_000, integer('X_BOOKMARK_HISTORY_LIMIT') || 800);
 
 export const importConfig = () => ({
   signupCredits: integer('FREE_SIGNUP_IMPORT_CREDITS'),
@@ -24,6 +28,7 @@ export const importConfig = () => ({
     import_5000: { credits: integer('IMPORT_5000_CREDITS'), priceId: process.env.STRIPE_IMPORT_5000_PRICE_ID || '' },
   },
   x: {
+    bookmarkHistoryLimit: bookmarkHistoryLimit(),
     unitCost: money('X_POST_READ_ESTIMATED_COST'),
     pricingVersion: process.env.X_PRICING_VERSION || 'unconfigured',
     monthlyBudget: money('X_API_MONTHLY_BUDGET'),
@@ -36,7 +41,7 @@ export const importConfig = () => ({
     initialPageSize: integer('X_SYNC_INITIAL_PAGE_SIZE') || 20,
     incrementalPageSize: integer('X_SYNC_INCREMENTAL_PAGE_SIZE') || 10,
     maxPages: Math.min(100, integer('X_SYNC_MAX_PAGES_PER_RUN') || 3),
-    maxHistoricalItems: Math.min(10000, integer('X_IMPORT_MAX_ITEMS') || 1000),
+    maxHistoricalItems: bookmarkHistoryLimit(),
   },
 });
 

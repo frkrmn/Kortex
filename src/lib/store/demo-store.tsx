@@ -40,6 +40,9 @@ export interface XStatusState {
   reauthorization_required?: boolean;
   next_sync_at?: string;
   hasPendingImport?: boolean;
+  initialImport?: { startedAt: string | null; completedAt: string | null; importedCount: number; limit: number | null; limitReached: boolean };
+  ongoingImportedCount?: number;
+  lastSyncError?: string | null;
 }
 
 interface DemoStoreContextType {

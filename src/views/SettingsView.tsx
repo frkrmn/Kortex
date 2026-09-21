@@ -59,13 +59,8 @@ export const SettingsView: React.FC = () => {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
-  const [availableImports, setAvailableImports] = useState<number | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [isImportingHistory, setIsImportingHistory] = useState(false);
-  useEffect(() => {
-    if (activeTab === 'sources' && (import.meta as any).env.VITE_DEMO_MODE === 'false')
-      void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => setAvailableImports(null));
-  }, [activeTab]);
   useEffect(() => { setHistoryHasMore(Boolean(xStatus.hasPendingImport)); }, [xStatus.hasPendingImport]);
 
   // Sync tab with URL search parameter
@@ -96,7 +91,6 @@ export const SettingsView: React.FC = () => {
         setIsConnecting(false);
         showToast(`Connected as @${data.data.username}`);
         await refreshXStatus();
-        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       } else if (data?.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
         setConnectError(data.error || 'Authorization failed.');
@@ -161,7 +155,6 @@ export const SettingsView: React.FC = () => {
       if (testRes.success) {
         await refreshXStatus();
         showToast('Connected to test X stream');
-        void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {});
       }
     } catch (e) {
       showToast('Could not connect test stream');
@@ -467,18 +460,13 @@ export const SettingsView: React.FC = () => {
                 </div>
 
                 {/* Actions */}
-                {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && (
-                  <p className="text-xs text-[#70706B] self-center">{availableImports === null ? 'Loading imports…' : `${availableImports.toLocaleString()} imports remaining`}</p>
-                )}
                 <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                   {xStatus.connected ? (
                     <>
                       <button
                         id="settings-sync-x-btn"
-                        onClick={async () => { await syncXBookmarks();
-                          if ((import.meta as any).env.VITE_DEMO_MODE === 'false')
-                            void api.getImportCredits().then(wallet => setAvailableImports(wallet.availableCredits)).catch(() => {}); }}
-                        disabled={syncProgress.isSyncing || ((import.meta as any).env.VITE_DEMO_MODE === 'false' && availableImports === 0)}
+                        onClick={async () => { await syncXBookmarks(); await refreshXStatus(); }}
+                        disabled={syncProgress.isSyncing}
                         className="px-3.5 py-1.5 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-xs font-semibold text-[#FAFAF8] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${syncProgress.isSyncing ? 'animate-spin' : ''}`} />
@@ -518,23 +506,32 @@ export const SettingsView: React.FC = () => {
 
               {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && (
                 <div className="pt-3 border-t border-[#E8E8E5] flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-[#70706B]">Historical import runs in bounded batches.</span>
-                  <button type="button" disabled={isImportingHistory || !availableImports}
+                  <span className="text-[#70706B]">X can import the latest bookmarks available through its official API. Older bookmarks may not be accessible.</span>
+                  <button type="button" disabled={isImportingHistory}
                     onClick={async () => {
                       setIsImportingHistory(true);
                       try {
-                        const result = await api.syncX({ limit: Math.min(1000, availableImports || 0), historical: true,
-                          continueImport: historyHasMore });
+                        const result = await api.syncX({ historical: true, continueImport: historyHasMore });
                         setHistoryHasMore(Boolean(result.hasMore));
                         if (result.items.length) addImportedBookmarks(result.items);
-                        showToast(`Imported ${result.addedCount} new bookmark(s).`);
-                        const wallet = await api.getImportCredits(); setAvailableImports(wallet.availableCredits);
+                        showToast(result.historicalLimitReached
+                          ? `Imported ${result.addedCount} bookmarks. The current X API history window has been reached.`
+                          : `Imported ${result.addedCount} new bookmark(s).`);
                         await refreshXStatus();
                       } catch (error: any) { showToast(error.message || 'Import could not complete.'); }
                       finally { setIsImportingHistory(false); }
                     }} className="rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-50">
-                    {isImportingHistory ? 'Importing…' : historyHasMore ? 'Continue historical import' : 'Import up to 1,000 bookmarks'}
+                    {isImportingHistory ? 'Importing…' : historyHasMore ? 'Continue historical import' : 'Import available history'}
                   </button>
+                </div>
+              )}
+
+              {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && xStatus.initialImport && (
+                <div className="pt-3 border-t border-[#E8E8E5] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-[#70706B]">Historical import</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.importedCount.toLocaleString()} imported</p></div>
+                  <div><span className="text-[#70706B]">Ongoing sync</span><p className="font-semibold text-[#171717]">{(xStatus.ongoingImportedCount || 0).toLocaleString()} captured since</p></div>
+                  <div><span className="text-[#70706B]">Status</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.limitReached ? 'Historical API window reached' : xStatus.initialImport.completedAt ? 'Historical import complete' : 'Import pending'}</p></div>
+                  {xStatus.initialImport.limitReached && <p className="sm:col-span-3 text-[#70706B]">X currently makes only its most recent bookmarks available through the official API. New bookmarks will continue syncing.</p>}
                 </div>
               )}
 

@@ -12,16 +12,19 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current
 CREATE TABLE auth.users(id uuid PRIMARY KEY);
 CREATE TABLE profiles(user_id uuid PRIMARY KEY REFERENCES auth.users(id));
 CREATE TABLE saved_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES auth.users(id),source text,external_id text,content text,
-  url text,author_id text,author_name text,author_username text,author_avatar_url text,published_at timestamptz,saved_at timestamptz,metadata jsonb,
+  url text,author_id text,author_name text,author_username text,author_avatar_url text,published_at timestamptz,saved_at timestamptz,summary text,metadata jsonb,
   UNIQUE(user_id,source,external_id));
 CREATE TABLE sync_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 CREATE TABLE processing_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,saved_item_id uuid,job_type text,status text);
 CREATE TABLE job_queue(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,type text,status text,priority integer,metadata jsonb);
 CREATE TABLE subscriptions(user_id uuid PRIMARY KEY,plan text,status text);
+CREATE TABLE connected_accounts(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES auth.users(id),provider text,metadata jsonb DEFAULT '{}'::jsonb);
+CREATE TABLE saved_item_embeddings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),saved_item_id uuid REFERENCES saved_items(id));
 INSERT INTO auth.users(id) VALUES('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 `);
 const sql = fs.readFileSync('supabase/migrations/20260919000004_import_economics.sql','utf8');
 await db.exec(sql);
+await db.exec(fs.readFileSync('supabase/migrations/20260920000005_x_bookmark_history_and_compliance.sql','utf8'));
 await db.exec(`SET request.jwt.claim.role = 'service_role'`);
 const one = '00000000-0000-0000-0000-000000000001';
 const two = '00000000-0000-0000-0000-000000000002';
@@ -58,6 +61,13 @@ await grant(two,1,'initial:user-two:v1');
 await db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[two,'post-a',JSON.stringify(row),jobId]);
 await assert.rejects(db.query(`SELECT * FROM import_x_saved_item($1,$2,$3::jsonb,$4)`,[two,'post-b',JSON.stringify(row),jobId]));
 assert.equal((await db.query(`SELECT count(*)::int AS n FROM saved_items WHERE user_id=$1`,[two])).rows[0].n,1);
+const unmetered = await db.query(`SELECT * FROM import_x_saved_item_unmetered($1,$2,$3::jsonb,$4)`,[two,'post-unmetered',JSON.stringify(row),jobId]);
+assert.equal(unmetered.rows[0].imported,true);
+assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[two])).rows[0].available_credits,0);
+await db.query(`SELECT mark_x_content_unavailable($1,'post-unmetered','deleted')`,[two]);
+const unavailable = await db.query(`SELECT content,external_content_status FROM saved_items WHERE user_id=$1 AND external_id='post-unmetered'`,[two]);
+assert.equal(unavailable.rows[0].external_content_status,'deleted');
+assert.match(unavailable.rows[0].content,/no longer available/);
 await assert.rejects(db.query(`UPDATE credit_ledger SET balance_delta=999 WHERE user_id=$1`,[one]));
 const reserve = await db.query(`SELECT reserve_provider_budget($1,'x',1,1,1) AS id`,[one]);
 assert.ok(reserve.rows[0].id);
@@ -71,4 +81,4 @@ await assert.rejects(db.query(`UPDATE credit_balances SET available_credits=100 
 await assert.rejects(db.query(`SELECT * FROM provider_usage_events`));
 await db.exec(`RESET ROLE`);
 await db.close();
-console.log('migration, atomic import, replayed grants, negative inputs, RLS, downgrade, and budget reservation passed');
+console.log('migration, unmetered X import, lifecycle state, replayed grants, negative inputs, RLS, downgrade, and budget reservation passed');

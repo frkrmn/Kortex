@@ -27,19 +27,19 @@ function callbackRequest(state: string, cookie: string): Request {
 test('X OAuth state is bound to one browser and one user and cannot be replayed', async () => {
   const oldFetch = globalThis.fetch;
   const envKeys = ['APP_URL', 'VITE_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'X_CLIENT_ID', 'ENCRYPTION_KEY', 'ENCRYPTION_SALT',
-    'FREE_SIGNUP_IMPORT_CREDITS', 'X_POST_READ_ESTIMATED_COST', 'X_PRICING_VERSION', 'X_API_MONTHLY_BUDGET', 'X_API_USER_MONTHLY_BUDGET'] as const;
+    'FREE_SIGNUP_IMPORT_CREDITS', 'X_BOOKMARK_HISTORY_LIMIT', 'X_POST_READ_ESTIMATED_COST', 'X_PRICING_VERSION', 'X_API_MONTHLY_BUDGET', 'X_API_USER_MONTHLY_BUDGET'] as const;
   const oldEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
   Object.assign(process.env, { APP_URL: 'http://localhost:3000', VITE_SUPABASE_URL: 'http://localhost:39999',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-key', X_CLIENT_ID: 'test-x-client',
     ENCRYPTION_KEY: 'test-encryption-key-with-more-than-32-characters', ENCRYPTION_SALT: 'test-stable-salt-12345',
     FREE_SIGNUP_IMPORT_CREDITS: '10', X_POST_READ_ESTIMATED_COST: '0.001', X_PRICING_VERSION: 'test',
-    X_API_MONTHLY_BUDGET: '100', X_API_USER_MONTHLY_BUDGET: '10' });
+    X_API_MONTHLY_BUDGET: '100', X_API_USER_MONTHLY_BUDGET: '10', X_BOOKMARK_HISTORY_LIMIT: '30' });
   let stateRow: Record<string, any> | null = null;
   let savedAccount: Record<string, any> | null = null;
   let savedBookmark: Record<string, any> | null = null;
   let bookmarksStatus = 200;
-  let creditBalance = 10;
   let xRequests = 0;
+  let paginateProvider = false;
   let providerTweets = [{ id: 'tweet-1', text: 'Private bookmark', author_id: 'x-user-1' }];
   const knownIds = new Set<string>();
   const usage: Array<{ resources: number; imported: number }> = [];
@@ -76,6 +76,7 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     }
     if (url.pathname === '/rest/v1/connected_accounts' && (init?.method === 'PATCH' || init?.method === 'DELETE')) {
       assert.equal(url.searchParams.get('id') === 'eq.account-a' || url.searchParams.get('user_id') === 'eq.user-a', true);
+      if (init?.method === 'PATCH' && savedAccount) Object.assign(savedAccount, JSON.parse(String(init.body)));
       if (new Headers(init?.headers).get('prefer')?.includes('return=representation')) return Response.json({ id: 'account-a' });
       return new Response(null, { status: 204 });
     }
@@ -85,13 +86,14 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
       xRequests++;
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer private-access-token');
       if (bookmarksStatus === 402) return Response.json({ title: 'Payment Required' }, { status: 402 });
-      return Response.json({ data: providerTweets.slice(0, Number(url.searchParams.get('max_results') || 100)),
+      const pageSize = Number(url.searchParams.get('max_results') || 100);
+      const offset = Number(url.searchParams.get('pagination_token') || 0);
+      const pageTweets = providerTweets.slice(offset, offset + pageSize);
+      return Response.json({ data: pageTweets,
+        meta: paginateProvider && offset + pageTweets.length < providerTweets.length ? { next_token: String(offset + pageTweets.length) } : {},
         includes: { users: [{ id: 'x-user-1', username: 'owner', name: 'Owner' }] } });
     }
-    if (url.pathname === '/rest/v1/credit_balances') return Response.json({ available_credits: creditBalance });
-    if (url.pathname === '/rest/v1/import_legacy_users') return Response.json(null);
     if (url.pathname === '/rest/v1/subscriptions') return Response.json(null);
-    if (url.pathname === '/rest/v1/credit_grants') return Response.json([]);
     if (url.pathname === '/rest/v1/provider_usage_events' && init?.method === 'PATCH') {
       const body = JSON.parse(String(init.body));
       if (usage.length) usage[usage.length - 1].imported = body.imported_items;
@@ -106,14 +108,14 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
       usage.push({ resources: body.p_resources, imported: body.p_imported });
       return Response.json(null);
     }
-    if (url.pathname === '/rest/v1/rpc/import_x_saved_item') {
+    if (url.pathname === '/rest/v1/rpc/import_x_saved_item_unmetered') {
       const input = JSON.parse(String(init?.body));
-      if (knownIds.has(input.p_external_id)) return Response.json([{ imported: false, charged: false, item_id: 'known' }]);
+      if (knownIds.has(input.p_external_id)) return Response.json([{ imported: false, item_id: 'known' }]);
       knownIds.add(input.p_external_id);
       savedBookmark = { ...input.p_row, id: 'bookmark-a', user_id: 'user-a', source: 'twitter', external_id: input.p_external_id,
         saved_at: new Date().toISOString(), imported_at: new Date().toISOString(), created_at: new Date().toISOString(),
         is_read: false, is_favorite: false, summary: null, media: [] };
-      return Response.json([{ imported: true, charged: true, item_id: 'bookmark-a' }]);
+      return Response.json([{ imported: true, item_id: 'bookmark-a' }]);
     }
     if (url.pathname === '/rest/v1/saved_items' && init?.method === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': '0-0/0' } });
     if (url.pathname === '/rest/v1/saved_items' && init?.method === 'GET') {
@@ -161,26 +163,39 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
 
     providerTweets = Array.from({ length: 10 }, (_, i) => ({ id: `batch-${i}`, text: `Bookmark ${i}`, author_id: 'x-user-1' }));
     for (let i = 0; i < 8; i++) knownIds.add(`batch-${i}`);
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const mixed = await syncLiveX('user-a');
     assert.equal(mixed.addedCount, 2);
-    assert.equal(mixed.creditsConsumed, 2);
     assert.deepEqual(usage.at(-1), { resources: 10, imported: 2 });
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const zeroYield = await syncLiveX('user-a');
     assert.equal(zeroYield.addedCount, 0);
     assert.deepEqual(usage.at(-1), { resources: 10, imported: 0 });
-    creditBalance = 0;
-    const beforeNoCredits = xRequests;
-    const exhausted = await syncLiveX('user-a');
-    assert.equal(exhausted.statusCode, 402);
-    assert.equal(xRequests, beforeNoCredits);
-    creditBalance = 10;
     providerTweets = Array.from({ length: 10_000 }, (_, i) => ({ id: `large-${i}`, text: `Large library ${i}`, author_id: 'x-user-1' }));
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const bounded = await syncLiveX('user-a', { limit: 10_000, historical: true });
     assert.equal(bounded.addedCount, 10);
     assert.equal(bounded.discoveredCount, 10);
     assert.deepEqual(usage.at(-1), { resources: 10, imported: 10 });
 
+    // The server boundary is configurable. Even if the provider exposes more,
+    // an initial historical import stops at that boundary and marks completion.
+    savedAccount!.initial_import_completed_at = null;
+    savedAccount!.initial_import_count = 0;
+    savedAccount!.sync_cursor = null;
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    providerTweets = Array.from({ length: 1000 }, (_, i) => ({ id: `history-${i}`, text: `History ${i}`, author_id: 'x-user-1' }));
+    paginateProvider = true;
+    const historyBounded = await syncLiveX('user-a', { historical: true });
+    assert.equal(historyBounded.addedCount, 30);
+    assert.equal(historyBounded.discoveredCount, 30);
+    assert.equal(historyBounded.historicalLimit, 30);
+    assert.equal(historyBounded.historicalLimitReached, true);
+    assert.equal(historyBounded.hasMore, false);
+    paginateProvider = false;
+
     bookmarksStatus = 402;
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const paymentRequired = await syncLiveX('user-a');
     assert.equal(paymentRequired.success, false);
     assert.equal(paymentRequired.statusCode, 402);

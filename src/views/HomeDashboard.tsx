@@ -42,6 +42,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     deleteBookmark,
     toggleBookmarkInCollection,
     showToast,
+    xStatus,
   } = useDemoStore();
 
   const formattedCurrentDate = new Intl.DateTimeFormat('en-US', {
@@ -141,6 +142,15 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {xStatus.connected && xStatus.initialImport && (
+        <div className="p-3.5 bg-[#FFFFFF] border border-[#E8E8E5] rounded-xl flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+          <span className="font-semibold text-[#171717]">X Sync <span className="text-emerald-600">● Active</span></span>
+          <span className="text-[#70706B]">{xStatus.initialImport.importedCount.toLocaleString()} imported historically</span>
+          <span className="text-[#70706B]">+{(xStatus.ongoingImportedCount || 0).toLocaleString()} captured since connecting</span>
+          <span className="text-[#70706B]">Last synced {xStatus.last_successful_sync ? new Date(xStatus.last_successful_sync).toLocaleString() : 'not yet'}</span>
+        </div>
+      )}
 
       {/* Main Grid: Left Primary Content (Recently Saved) & Right Column (Topics, Quick Actions, Collections) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

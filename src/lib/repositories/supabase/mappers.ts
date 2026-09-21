@@ -33,6 +33,7 @@ export function mapSavedItemRowToBookmark(
     is_read: row.is_read,
     is_favorite: row.is_favorite,
     ai_summary: row.summary || '',
+    external_content_status: (row as any).external_content_status || meta.x_content_status || 'available',
     topics: topics.length > 0 ? topics : (meta.topics || []),
     keywords: meta.keywords || [],
     collection_ids: collectionIds.length > 0 ? collectionIds : (meta.collection_ids || []),

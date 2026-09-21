@@ -172,16 +172,13 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429,
       error: 'X sync is temporarily limited. Please try again later.' };
   }
-  await CreditService.ensureInitialGrant(userId);
-  await CreditService.ensureMonthlyAllowance(userId);
   const settings = importConfig().x;
-  const balance = await CreditService.balance(userId);
-  if (balance <= 0) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 402,
-    error: "You've used your available imports. Add Import Credits or wait for your next allowance." };
-  const requested = Number.isSafeInteger(options.limit) && (options.limit || 0) > 0
-    ? Math.min(options.limit!, settings.maxHistoricalItems) : settings.initialPageSize;
-  const maxItems = Math.min(requested, balance);
-  const firstPageSize = Math.max(1, Math.min(100, maxItems, options.historical ? settings.initialPageSize : settings.incrementalPageSize));
+  const isInitialImport = !account.initial_import_completed_at;
+  // The server decides whether a call is initial history or ongoing sync. The
+  // browser cannot request a larger historical window.
+  const requested = isInitialImport ? settings.bookmarkHistoryLimit : Math.max(1, Math.min(100, options.limit || settings.incrementalPageSize));
+  const maxItems = requested;
+  const firstPageSize = Math.max(1, Math.min(100, maxItems, isInitialImport ? settings.initialPageSize : settings.incrementalPageSize));
   const { data: subscription, error: subscriptionError } = await db.from('subscriptions')
     .select('plan,status,current_period_end').eq('user_id', userId).maybeSingle();
   if (subscriptionError) throw subscriptionError;
@@ -190,7 +187,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
   const priority = options.automatic ? 'automatic' : isPro ? 'paid_manual' : 'free_manual';
   const preflight = await ProviderBudgetService.canPerformOperation(userId, firstPageSize, priority);
   if (!preflight.allowed) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
-  await recordImportEvent(userId, 'import_started', { requested, historical: Boolean(options.historical), automatic: Boolean(options.automatic) });
+  await recordImportEvent(userId, 'import_started', { requested, historical: isInitialImport, automatic: Boolean(options.automatic) });
   let accessToken = decryptToken(account.access_token_encrypted);
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() < Date.now() + 120000) {
     if (!account.refresh_token_encrypted) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
@@ -231,14 +228,14 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     throw jobError;
   }
   try {
-    let nextToken: string | undefined = options.historical && options.continueImport && account.sync_cursor !== '__first__'
+    let nextToken: string | undefined = isInitialImport && options.continueImport && account.sync_cursor !== '__first__'
       ? account.sync_cursor || undefined : undefined;
     let discovered = 0;
     let added = 0;
-    let charged = 0;
     const savedIds: string[] = [];
-    for (let page = 0; page < settings.maxPages && added < maxItems; page++) {
-      const pageSize = Math.max(1, Math.min(100, maxItems - added, options.historical ? settings.initialPageSize : settings.incrementalPageSize));
+    const maxPages = isInitialImport ? Math.ceil(settings.bookmarkHistoryLimit / settings.initialPageSize) : settings.maxPages;
+    for (let page = 0; page < maxPages && discovered < maxItems; page++) {
+      const pageSize = Math.max(1, Math.min(100, maxItems - discovered, isInitialImport ? settings.initialPageSize : settings.incrementalPageSize));
       if (page > 0) {
         const budget = await ProviderBudgetService.canPerformOperation(userId, pageSize, priority);
         if (!budget.allowed) break;
@@ -278,6 +275,18 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       }
       const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string;
         note_post?: { text?: string }; note_tweet?: { text?: string } }> = payload.data || [];
+      // X can return partial errors for unavailable or restricted Posts. Only
+      // explicit provider errors change content lifecycle state; an omitted old
+      // bookmark can simply be outside the API's accessible window.
+      for (const providerError of payload.errors || []) {
+        const externalId = providerError?.resource_id || providerError?.value;
+        const detail = `${providerError?.title || ''} ${providerError?.detail || ''}`.toLowerCase();
+        if (typeof externalId === 'string') {
+          const status = detail.includes('protected') || detail.includes('restricted') ? 'restricted'
+            : detail.includes('delete') || detail.includes('not found') ? 'deleted' : 'unavailable';
+          await CreditService.markXUnavailable(userId, externalId, status);
+        }
+      }
       // Persist provider cost before importing. If this fails, no item/credit transaction proceeds.
       await ProviderBudgetService.recordUsage({ reservationId, syncJobId: job.id, resourcesRead: tweets.length,
         importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
@@ -287,7 +296,6 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       let processedTweets = 0;
       try {
         for (const tweet of tweets) {
-          if (added >= maxItems) break;
           processedTweets++;
           if (typeof tweet.id !== 'string' || typeof tweet.text !== 'string') continue;
           const author: any = authors.get(tweet.author_id);
@@ -295,9 +303,8 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
             url: `https://x.com/${author?.username || 'i'}/status/${tweet.id}`, author_id: tweet.author_id || null,
             author_name: author?.name || '', author_username: author?.username || '', author_avatar_url: author?.profile_image_url || null,
             published_at: tweet.created_at || null, metadata: {} };
-          const result = await CreditService.importX(userId, tweet.id, row, job.id);
+          const result = await CreditService.importXUnmetered(userId, tweet.id, row, job.id);
           if (result?.imported) { added++; pageAdded++; savedIds.push(result.item_id); }
-          if (result?.charged) charged++;
         }
       } finally {
         await ProviderBudgetService.updateImportedItems(reservationId, pageAdded, tweets.length);
@@ -312,14 +319,27 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     if (saveError) throw saveError;
     if (discovered > 0 && added === 0) await recordImportEvent(userId, 'sync_zero_yield', { resourcesRead: discovered });
     const now = new Date().toISOString();
+    const reachedHistoricalLimit = isInitialImport && discovered >= settings.bookmarkHistoryLimit;
+    const pendingCursor = reachedHistoricalLimit ? null : nextToken || null;
     await Promise.all([
       db.from('sync_jobs').update({ status: 'completed', items_discovered: discovered, items_processed: added,
-        cursor: options.historical ? nextToken || null : null, completed_at: now }).eq('id', job.id),
+        cursor: isInitialImport ? pendingCursor : null, completed_at: now }).eq('id', job.id),
       db.from('connected_accounts').update({ sync_status: 'idle', last_sync_at: now, last_successful_sync_at: now,
-        next_sync_at: null, ...(options.historical ? { sync_cursor: nextToken || null } : {}) }).eq('id', account.id),
+        next_sync_at: null,
+        ...(isInitialImport ? {
+          sync_cursor: pendingCursor,
+          initial_import_started_at: account.initial_import_started_at || now,
+          initial_import_completed_at: pendingCursor ? null : now,
+          initial_import_count: Number(account.initial_import_count || 0) + added,
+          initial_import_limit: settings.bookmarkHistoryLimit,
+          historical_limit_reached: reachedHistoricalLimit,
+        } : { ongoing_sync_import_count: Number(account.ongoing_sync_import_count || 0) + added }),
+      }).eq('id', account.id),
     ]);
-    return { success: true, addedCount: added, creditsConsumed: charged, discoveredCount: discovered,
-      hasMore: Boolean(nextToken),
+    return { success: true, addedCount: added, discoveredCount: discovered, historicalLimit: isInitialImport ? settings.bookmarkHistoryLimit : undefined,
+      historicalLimitReached: reachedHistoricalLimit,
+      initialImport: isInitialImport,
+      hasMore: Boolean(pendingCursor),
       items: (saved || []).map(row => mapSavedItemRowToBookmark(row)) };
   } catch (syncError) {
     const paymentRequired = syncError instanceof XBookmarkPaymentRequiredError;

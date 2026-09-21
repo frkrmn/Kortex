@@ -77,6 +77,11 @@ export const api = {
     sync_status: 'idle' | 'syncing' | 'error';
     configured: boolean;
     redirectUri: string;
+    initialImport?: { startedAt: string | null; completedAt: string | null; importedCount: number; limit: number | null; limitReached: boolean };
+    ongoingImportedCount?: number;
+    lastSyncError?: string | null;
+    reauthorizationRequired?: boolean;
+    reauthorization_required?: boolean;
   }> {
     const res = await apiFetch('/api/integrations/x/status');
     if (!res.ok) throw new Error('Failed to fetch X connection status');
@@ -109,7 +114,7 @@ export const api = {
     return res.json();
   },
 
-  async syncX(options?: { limit?: number; historical?: boolean; continueImport?: boolean }): Promise<{ success: boolean; addedCount: number; discoveredCount: number; hasMore?: boolean; items: Bookmark[]; error?: string }> {
+  async syncX(options?: { limit?: number; historical?: boolean; continueImport?: boolean }): Promise<{ success: boolean; addedCount: number; discoveredCount: number; hasMore?: boolean; historicalLimit?: number; historicalLimitReached?: boolean; initialImport?: boolean; items: Bookmark[]; error?: string }> {
     const res = await apiFetch('/api/integrations/x/sync', { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options || {}) });
     if (!res.ok) {

@@ -46,6 +46,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   });
 
   const mediaItem = bookmark.media && bookmark.media.length > 0 ? bookmark.media[0] : null;
+  const unavailableOnX = bookmark.source === 'twitter' && bookmark.external_content_status && bookmark.external_content_status !== 'available';
 
   if (variant === 'compact') {
     return (
@@ -98,6 +99,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       className="group relative bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D5D5CF] rounded-xl p-4 sm:p-5 transition-all hover:shadow-xs flex flex-col justify-between"
     >
       <div>
+        {unavailableOnX && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+            This post is no longer available on X.
+          </div>
+        )}
         {/* Top Meta: Author info & Quick Controls */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 min-w-0">

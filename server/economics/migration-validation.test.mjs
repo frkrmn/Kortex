@@ -12,7 +12,7 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current
 CREATE TABLE auth.users(id uuid PRIMARY KEY);
 CREATE TABLE profiles(user_id uuid PRIMARY KEY REFERENCES auth.users(id));
 CREATE TABLE saved_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES auth.users(id),source text,external_id text,content text,
-  url text,author_id text,author_name text,author_username text,author_avatar_url text,published_at timestamptz,saved_at timestamptz,summary text,metadata jsonb,
+  url text,author_id text,author_name text,author_username text,author_avatar_url text,media jsonb DEFAULT '[]'::jsonb,published_at timestamptz,saved_at timestamptz,summary text,metadata jsonb,
   UNIQUE(user_id,source,external_id));
 CREATE TABLE sync_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 CREATE TABLE processing_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,saved_item_id uuid,job_type text,status text);
@@ -26,6 +26,7 @@ const sql = fs.readFileSync('supabase/migrations/20260919000004_import_economics
 await db.exec(sql);
 await db.exec(fs.readFileSync('supabase/migrations/20260920000005_x_bookmark_history_and_compliance.sql','utf8'));
 await db.exec(fs.readFileSync('supabase/migrations/20260921000007_service_role_rpc_claims.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20260922000007_rich_x_content_foundation.sql','utf8'));
 await db.exec(`SET request.jwt.claim.role = 'service_role'; SET request.jwt.claims = '{"role":"service_role"}'`);
 const one = '00000000-0000-0000-0000-000000000001';
 const two = '00000000-0000-0000-0000-000000000002';
@@ -76,6 +77,13 @@ await db.exec(`SET request.jwt.claims = '{"role":"service_role"}'; SET ROLE serv
 const unmetered = await db.query(`SELECT * FROM import_x_saved_item_unmetered($1,$2,$3::jsonb,$4)`,[two,'post-unmetered',JSON.stringify(row),jobId]);
 await db.exec(`RESET ROLE`);
 assert.equal(unmetered.rows[0].imported,true);
+const richRow = {content:'Rich',url:'https://x.com/a/status/rich',media:[{type:'image',mediaKey:'m1',url:'https://pbs.twimg.com/rich.jpg'}],
+  metadata:{x_conversation_id:'conversation-1',x_thread_detected:true,x_thread_fully_available:false,x_referenced_posts:[]}};
+const rich = await db.query(`SELECT * FROM import_x_saved_item_unmetered($1,$2,$3::jsonb,$4)`,[two,'post-rich',JSON.stringify(richRow),jobId]);
+assert.equal(rich.rows[0].imported,true);
+const persistedRich = (await db.query(`SELECT media,metadata FROM saved_items WHERE user_id=$1 AND external_id='post-rich'`,[two])).rows[0];
+assert.equal(persistedRich.media[0].mediaKey,'m1');
+assert.equal(persistedRich.metadata.x_conversation_id,'conversation-1');
 assert.equal((await db.query(`SELECT available_credits FROM credit_balances WHERE user_id=$1`,[two])).rows[0].available_credits,0);
 await db.query(`SELECT mark_x_content_unavailable($1,'post-unmetered','deleted')`,[two]);
 const unavailable = await db.query(`SELECT content,external_content_status FROM saved_items WHERE user_id=$1 AND external_id='post-unmetered'`,[two]);

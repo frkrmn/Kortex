@@ -28,6 +28,11 @@ export function mapSavedItemRowToBookmark(
     content: row.content,
     url: row.url || '',
     media: (row.media as any) || [],
+    published_at: row.published_at || undefined,
+    conversation_id: meta.x_conversation_id || undefined,
+    referenced_posts: Array.isArray(meta.x_referenced_posts) ? meta.x_referenced_posts : [],
+    thread_detected: meta.x_thread_detected === true,
+    thread_fully_available: meta.x_thread_fully_available === true,
     // X exposes post publication time, not the time the user bookmarked it.
     bookmark_created_at: row.published_at || row.saved_at || row.created_at,
     imported_at: row.imported_at || row.created_at,

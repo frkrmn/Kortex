@@ -3,15 +3,9 @@ import {
   ArrowLeft,
   Heart,
   CheckCircle2,
-  FolderPlus,
   ExternalLink,
   Sparkles,
   Trash2,
-  Tag,
-  Calendar,
-  ThumbsUp,
-  Repeat2,
-  MessageSquare,
   Check,
   RefreshCw,
   Globe,
@@ -22,6 +16,7 @@ import {
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
+import { XBookmarkReader } from '../components/XBookmarkReader';
 import { api } from '../lib/api';
 import { Bookmark } from '../types';
 
@@ -83,20 +78,11 @@ export const BookmarkDetailView: React.FC = () => {
     ? vectorRelated.map(r => ({ ...r.bookmark, _similarity: r.similarity }))
     : fallbackRelated.map(b => ({ ...b, _similarity: undefined }));
 
-  const formattedDate = new Date(bookmark.bookmark_created_at).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
   const formattedImportDate = new Date(bookmark.imported_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
-
-  const mediaItem = bookmark.media && bookmark.media.length > 0 ? bookmark.media[0] : null;
 
   return (
     <div id="bookmark-detail-view" className="space-y-8 pb-20 max-w-5xl mx-auto">
@@ -174,65 +160,7 @@ export const BookmarkDetailView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Column: Original saved content */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-5">
-            {/* Author Meta */}
-            <div className="flex items-center justify-between gap-4 pb-4 border-b border-[#F0F0EC]">
-              <div className="flex items-center gap-3">
-                <img
-                  src={bookmark.author_avatar}
-                  alt={bookmark.author_name}
-                  className="w-12 h-12 rounded-full object-cover border border-[#E5E5E0]"
-                />
-                <div>
-                  <h2 className="text-base font-bold text-[#171717]">{bookmark.author_name}</h2>
-                  <p className="text-xs text-[#70706B]">@{bookmark.author_username}</p>
-                </div>
-              </div>
-
-              <div className="text-right text-xs text-[#8A8A85]">
-                <span className="capitalize block font-medium text-[#171717]">X / Twitter</span>
-                <span>{formattedDate}</span>
-              </div>
-            </div>
-
-            {/* Post Content */}
-            <div className="text-[15px] leading-relaxed text-[#1F1F1D] whitespace-pre-line font-normal select-text">
-              {bookmark.content}
-            </div>
-
-            {/* Media Attachment */}
-            {mediaItem && (
-              <div className="rounded-xl overflow-hidden border border-[#E8E8E5] max-h-96 bg-[#F5F5F3]">
-                <img
-                  src={mediaItem.url}
-                  alt={mediaItem.alt || 'Post media'}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
-            )}
-
-            {/* Engagement Metrics */}
-            <div className="pt-4 border-t border-[#F0F0EC] flex items-center gap-6 text-xs text-[#70706B]">
-              {bookmark.engagement?.likes ? (
-                <div className="flex items-center gap-1.5">
-                  <ThumbsUp className="w-4 h-4 text-[#8A8A85]" />
-                  <span>{bookmark.engagement.likes.toLocaleString()} likes</span>
-                </div>
-              ) : null}
-              {bookmark.engagement?.retweets ? (
-                <div className="flex items-center gap-1.5">
-                  <Repeat2 className="w-4 h-4 text-[#8A8A85]" />
-                  <span>{bookmark.engagement.retweets.toLocaleString()} reposts</span>
-                </div>
-              ) : null}
-              {bookmark.engagement?.replies ? (
-                <div className="flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-[#8A8A85]" />
-                  <span>{bookmark.engagement.replies.toLocaleString()} replies</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
+          <XBookmarkReader bookmark={bookmark} />
         </div>
 
         {/* Side Column: Recallly Intelligence */}

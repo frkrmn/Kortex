@@ -39,7 +39,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  const formattedDate = new Date(bookmark.bookmark_created_at).toLocaleDateString('en-US', {
+  const formattedDate = new Date(bookmark.published_at || bookmark.bookmark_created_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -236,13 +236,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </p>
 
           {/* Media Thumbnail */}
-          {mediaItem && (
+          {mediaItem && !unavailableOnX && (
             <div className="rounded-xl overflow-hidden border border-[#E8E8E5] max-h-56 bg-[#F5F5F3]">
               <img
-                src={mediaItem.url}
+                src={mediaItem.previewUrl || mediaItem.url}
                 alt={mediaItem.alt || 'Post media'}
                 className="w-full h-48 object-cover hover:scale-101 transition-transform duration-200"
                 loading="lazy"
+                onError={(event) => { event.currentTarget.style.display = 'none'; }}
               />
             </div>
           )}

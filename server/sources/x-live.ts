@@ -3,6 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import type { Request, Response } from 'express';
 import { decryptToken, encryptToken } from '../crypto';
 import { mapSavedItemRowToBookmark } from '../../src/lib/repositories/supabase/mappers';
+import {
+  normalizeXBookmarkPage,
+  X_BOOKMARK_EXPANSIONS,
+  X_BOOKMARK_MEDIA_FIELDS,
+  X_BOOKMARK_POST_FIELDS,
+  X_BOOKMARK_USER_FIELDS,
+  type XApiBookmarkPage,
+} from './x-content';
 
 const COOKIE = 'kortex_x_oauth_bind';
 const CALLBACK_PATH = '/api/integrations/x/callback';
@@ -253,9 +261,10 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       const url = new URL(`https://api.x.com/2/users/${encodeURIComponent(account.provider_user_id)}/bookmarks`);
       const pageRequestToken = nextToken;
       url.searchParams.set('max_results', String(pageSize));
-      url.searchParams.set('expansions', 'author_id');
-      url.searchParams.set('post.fields', 'created_at,note_post');
-      url.searchParams.set('user.fields', 'name,username,profile_image_url');
+      url.searchParams.set('expansions', X_BOOKMARK_EXPANSIONS.join(','));
+      url.searchParams.set('tweet.fields', X_BOOKMARK_POST_FIELDS.join(','));
+      url.searchParams.set('user.fields', X_BOOKMARK_USER_FIELDS.join(','));
+      url.searchParams.set('media.fields', X_BOOKMARK_MEDIA_FIELDS.join(','));
       if (nextToken) url.searchParams.set('pagination_token', nextToken);
       let response: globalThis.Response;
       if (budgetPreflightBypassed) console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId,
@@ -289,7 +298,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         if (response.status === 402) throw new XBookmarkPaymentRequiredError('X sync is temporarily unavailable. Your existing Recallly library is still available.');
         throw new Error(`X bookmarks request failed (${response.status}).`);
       }
-      let payload: any;
+      let payload: XApiBookmarkPage;
       try { payload = await response.json(); }
       catch (error) {
         if (budgetPreflightBypassed) {
@@ -301,8 +310,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         }
         throw error;
       }
-      const tweets: Array<{ id: string; text: string; author_id?: string; created_at?: string;
-        note_post?: { text?: string }; note_tweet?: { text?: string } }> = payload.data || [];
+      const tweets = payload.data || [];
       // X can return partial errors for unavailable or restricted Posts. Only
       // explicit provider errors change content lifecycle state; an omitted old
       // bookmark can simply be outside the API's accessible window.
@@ -327,19 +335,12 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
           importedItems: 0, requestId: response.headers.get('x-request-id') || undefined });
       }
       discovered += tweets.length;
-      const authors = new Map((payload.includes?.users || []).map((author: any) => [author.id, author]));
+      const normalized = normalizeXBookmarkPage(payload);
       let pageAdded = 0;
-      let processedTweets = 0;
+      const processedTweets = tweets.length;
       try {
-        for (const tweet of tweets) {
-          processedTweets++;
-          if (typeof tweet.id !== 'string' || typeof tweet.text !== 'string') continue;
-          const author: any = authors.get(tweet.author_id);
-          const row = { content: tweet.note_post?.text || tweet.note_tweet?.text || tweet.text,
-            url: `https://x.com/${author?.username || 'i'}/status/${tweet.id}`, author_id: tweet.author_id || null,
-            author_name: author?.name || '', author_username: author?.username || '', author_avatar_url: author?.profile_image_url || null,
-            published_at: tweet.created_at || null, metadata: {} };
-          const result = await CreditService.importXUnmetered(userId, tweet.id, row, job.id);
+        for (const item of normalized) {
+          const result = await CreditService.importXUnmetered(userId, item.externalId, item.row, job.id);
           if (result?.imported) { added++; pageAdded++; savedIds.push(result.item_id); }
         }
       } finally {

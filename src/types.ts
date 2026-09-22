@@ -5,6 +5,23 @@ export interface BookmarkMedia {
   url: string;
   previewUrl?: string;
   alt?: string;
+  mediaKey?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface BookmarkReferencedPost {
+  type: 'retweeted' | 'quoted' | 'replied_to';
+  externalId: string;
+  text?: string;
+  authorId?: string;
+  authorName?: string;
+  authorUsername?: string;
+  authorAvatarUrl?: string;
+  publishedAt?: string;
+  conversationId?: string;
+  media: BookmarkMedia[];
+  available: boolean;
 }
 
 export interface Bookmark {
@@ -19,6 +36,11 @@ export interface Bookmark {
   content: string;
   url: string;
   media?: BookmarkMedia[];
+  published_at?: string;
+  conversation_id?: string;
+  referenced_posts?: BookmarkReferencedPost[];
+  thread_detected?: boolean;
+  thread_fully_available?: boolean;
   bookmark_created_at: string;
   imported_at: string;
   is_read: boolean;

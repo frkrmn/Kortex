@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:economics": "node --import tsx --test server/live-api.test.ts server/sources/x-live.test.ts server/sources/x-e2e-allowlist.test.ts server/economics/provider-budget.test.ts server/economics/demo-isolation.test.ts src/lib/bookmark-order.test.ts && node server/economics/migration-validation.test.mjs"
+    "test:economics": "node --import tsx --test server/live-api.test.ts server/sources/x-content.test.ts server/sources/x-live.test.ts server/sources/x-e2e-allowlist.test.ts server/economics/provider-budget.test.ts server/economics/demo-isolation.test.ts src/components/XBookmarkReader.test.tsx src/lib/bookmark-order.test.ts && node server/economics/migration-validation.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

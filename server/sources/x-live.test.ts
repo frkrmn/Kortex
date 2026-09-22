@@ -40,7 +40,20 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
   let bookmarksStatus = 200;
   let xRequests = 0;
   let paginateProvider = false;
-  let providerTweets = [{ id: 'tweet-1', text: 'Private bookmark', author_id: 'x-user-1' }];
+  let providerTweets: any[] = [{ id: 'tweet-1', text: 'Private bookmark', note_tweet: { text: 'Full private bookmark' },
+    author_id: 'x-user-1', created_at: '2026-09-20T10:00:00Z', conversation_id: 'thread-root',
+    attachments: { media_keys: ['media-1', 'media-2'] }, referenced_tweets: [{ type: 'replied_to', id: 'thread-root' }] }];
+  const providerIncludes = {
+    users: [
+      { id: 'x-user-1', username: 'owner', name: 'Owner', profile_image_url: 'https://pbs.twimg.com/owner.jpg' },
+      { id: 'x-user-2', username: 'root', name: 'Root author', profile_image_url: 'https://pbs.twimg.com/root.jpg' },
+    ],
+    media: [
+      { media_key: 'media-1', type: 'photo', url: 'https://pbs.twimg.com/image.jpg', width: 1200, height: 800, alt_text: 'Diagram' },
+      { media_key: 'media-2', type: 'video', preview_image_url: 'https://pbs.twimg.com/video.jpg', width: 1280, height: 720 },
+    ],
+    tweets: [{ id: 'thread-root', text: 'Thread root', author_id: 'x-user-2', conversation_id: 'thread-root' }],
+  };
   const knownIds = new Set<string>();
   const usage: Array<{ resources: number; imported: number }> = [];
   globalThis.fetch = async (input, init) => {
@@ -85,13 +98,18 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     if (url.pathname === '/2/users/x-user-1/bookmarks') {
       xRequests++;
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer private-access-token');
+      assert.match(url.searchParams.get('tweet.fields') || '', /conversation_id/);
+      assert.match(url.searchParams.get('tweet.fields') || '', /referenced_tweets/);
+      assert.match(url.searchParams.get('expansions') || '', /attachments.media_keys/);
+      assert.match(url.searchParams.get('expansions') || '', /referenced_tweets.id/);
+      assert.match(url.searchParams.get('media.fields') || '', /preview_image_url/);
       if (bookmarksStatus === 402) return Response.json({ title: 'Payment Required' }, { status: 402 });
       const pageSize = Number(url.searchParams.get('max_results') || 100);
       const offset = Number(url.searchParams.get('pagination_token') || 0);
       const pageTweets = providerTweets.slice(offset, offset + pageSize);
       return Response.json({ data: pageTweets,
         meta: paginateProvider && offset + pageTweets.length < providerTweets.length ? { next_token: String(offset + pageTweets.length) } : {},
-        includes: { users: [{ id: 'x-user-1', username: 'owner', name: 'Owner' }] } });
+        includes: providerIncludes });
     }
     if (url.pathname === '/rest/v1/subscriptions') return Response.json(null);
     if (url.pathname === '/rest/v1/provider_usage_events' && init?.method === 'PATCH') {
@@ -119,7 +137,7 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
       knownIds.add(input.p_external_id);
       savedBookmark = { ...input.p_row, id: 'bookmark-a', user_id: 'user-a', source: 'twitter', external_id: input.p_external_id,
         saved_at: new Date().toISOString(), imported_at: new Date().toISOString(), created_at: new Date().toISOString(),
-        is_read: false, is_favorite: false, summary: null, media: [] };
+        is_read: false, is_favorite: false, summary: null, media: input.p_row.media || [] };
       return Response.json([{ imported: true, item_id: 'bookmark-a' }]);
     }
     if (url.pathname === '/rest/v1/saved_items' && init?.method === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': '0-0/0' } });
@@ -165,6 +183,12 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(sync.addedCount, 1);
     assert.equal(savedBookmark?.user_id, 'user-a');
     assert.equal(sync.items[0].user_id, 'user-a');
+    assert.equal(savedBookmark?.content, 'Full private bookmark');
+    assert.equal(savedBookmark?.media.length, 2);
+    assert.equal(savedBookmark?.metadata.x_conversation_id, 'thread-root');
+    assert.equal(savedBookmark?.metadata.x_thread_detected, true);
+    assert.equal(savedBookmark?.metadata.x_thread_fully_available, false);
+    assert.equal(savedBookmark?.metadata.x_referenced_posts[0].text, 'Thread root');
 
     providerTweets = Array.from({ length: 10 }, (_, i) => ({ id: `batch-${i}`, text: `Bookmark ${i}`, author_id: 'x-user-1' }));
     for (let i = 0; i < 8; i++) knownIds.add(`batch-${i}`);

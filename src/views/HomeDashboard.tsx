@@ -18,6 +18,7 @@ import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { Bookmark } from '../types';
+import { sortBookmarksNewestFirst } from '../lib/bookmark-order';
 
 interface HomeDashboardProps {
   onOpenSearch: () => void;
@@ -53,12 +54,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   }).format(new Date());
 
   // Recently saved items (4 bookmarks)
-  const recentBookmarks = bookmarks.slice(0, 4);
+  const newestBookmarks = sortBookmarksNewestFirst<Bookmark>(bookmarks);
+  const recentBookmarks = newestBookmarks.slice(0, 4);
 
   // Worth revisiting items (powered by Rediscovery Service)
   const worthRevisitingItems = rediscoveryCandidates.length > 0
     ? rediscoveryCandidates.slice(0, 3)
-    : bookmarks.slice(4, 7).map((bm) => ({
+    : newestBookmarks.slice(4, 7).map((bm) => ({
         bookmark: bm,
         reason: 'Saved earlier • Revisit value',
         daysSinceSaved: 45,

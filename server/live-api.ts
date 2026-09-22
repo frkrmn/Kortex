@@ -10,6 +10,7 @@ import { LiveStripeService } from './economics/live-stripe';
 import { recordImportEvent } from './economics/analytics';
 import { economicsAdmin } from './economics/credit-service';
 import { isXSyncE2ETestUser } from './sources/x-e2e-allowlist';
+import { sortBookmarksNewestFirst } from '../src/lib/bookmark-order';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -289,7 +290,9 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       if (req.query.filter === 'favorites') query = query.eq('is_favorite', true);
       const { data, error } = await query;
       if (error) throw error;
-      let items = data.map(row => mapSavedItemRowToBookmark(row));
+      let items = sortBookmarksNewestFirst<ReturnType<typeof mapSavedItemRowToBookmark>>(
+        data.map(row => mapSavedItemRowToBookmark(row))
+      );
       if (typeof req.query.query === 'string' && req.query.query.trim()) {
         const term = req.query.query.toLowerCase().trim();
         items = items.filter(item => `${item.content} ${item.author_name} ${item.ai_summary}`.toLowerCase().includes(term));

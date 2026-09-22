@@ -25,6 +25,7 @@ import {
   RichInsightsData,
 } from '../demo-data';
 import { repositories, isDemoMode } from '../repositories';
+import { sortBookmarksNewestFirst } from '../bookmark-order';
 import { api } from '../api';
 
 export interface XStatusState {
@@ -274,7 +275,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let cancelled = false;
     api.getBookmarks()
       .then((serverBookmarks) => {
-        if (!cancelled) setBookmarks(serverBookmarks);
+        if (!cancelled) setBookmarks(sortBookmarksNewestFirst<Bookmark>(serverBookmarks));
       })
       .catch((error) => console.warn('Could not fetch bookmarks:', error));
     return () => { cancelled = true; };
@@ -287,7 +288,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const existingIds = new Set(prev.map((b) => b.external_id || b.id));
       const fresh = newItems.filter((item) => !existingIds.has(item.external_id || item.id));
       if (fresh.length === 0) return prev;
-      return [...fresh, ...prev];
+      return sortBookmarksNewestFirst<Bookmark>([...fresh, ...prev]);
     });
   }, []);
 

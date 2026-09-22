@@ -28,7 +28,8 @@ export function mapSavedItemRowToBookmark(
     content: row.content,
     url: row.url || '',
     media: (row.media as any) || [],
-    bookmark_created_at: row.saved_at || row.created_at,
+    // X exposes post publication time, not the time the user bookmarked it.
+    bookmark_created_at: row.published_at || row.saved_at || row.created_at,
     imported_at: row.imported_at || row.created_at,
     is_read: row.is_read,
     is_favorite: row.is_favorite,

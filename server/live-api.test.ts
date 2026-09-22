@@ -56,7 +56,7 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       return Response.json({
         id, user_id: owner, source: 'x', external_id: id, content: `${owner} private data`,
         url: null, author_id: null, author_name: owner, author_username: owner,
-        author_avatar_url: null, media: [], saved_at: '2026-01-01T00:00:00Z',
+        author_avatar_url: null, media: [], published_at: '2025-12-20T12:00:00Z', saved_at: '2026-01-01T00:00:00Z',
         imported_at: '2026-01-01T00:00:00Z', summary: null, is_read: false,
         is_favorite: false, metadata: {}, created_at: '2026-01-01T00:00:00Z',
       });
@@ -102,6 +102,7 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     await liveApi(request('/bookmarks/user-a-bookmark', 'user-a'), own.res);
     assert.equal(own.result.code, 200);
     assert.equal((own.result.body as { user_id: string }).user_id, 'user-a');
+    assert.equal((own.result.body as { bookmark_created_at: string }).bookmark_created_at, '2025-12-20T12:00:00Z');
 
     const crossTenant = response();
     await liveApi(request('/bookmarks/user-b-bookmark', 'user-a'), crossTenant.res);

@@ -143,8 +143,11 @@ const STORAGE_KEYS = {
 };
 
 export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const demoMode = isDemoMode();
+
   // Local persistence helpers
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
+    if (!demoMode) return [];
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.BOOKMARKS);
       return saved ? JSON.parse(saved) : demoBookmarks;
@@ -263,6 +266,19 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     refreshXStatus();
   }, [refreshXStatus]);
+
+  // Production data is server-owned. Never hydrate a signed-in user from the
+  // interactive demo fixture/localStorage namespace.
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+    api.getBookmarks()
+      .then((serverBookmarks) => {
+        if (!cancelled) setBookmarks(serverBookmarks);
+      })
+      .catch((error) => console.warn('Could not fetch bookmarks:', error));
+    return () => { cancelled = true; };
+  }, [demoMode]);
 
   // Add imported bookmarks helper (deduplicated)
   const addImportedBookmarks = useCallback((newItems: Bookmark[]) => {
@@ -462,12 +478,13 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Sync to localStorage
   useEffect(() => {
+    if (!demoMode) return;
     try {
       localStorage.setItem(STORAGE_KEYS.BOOKMARKS, JSON.stringify(bookmarks));
     } catch (e) {
       console.warn('Could not persist bookmarks to localStorage', e);
     }
-  }, [bookmarks]);
+  }, [bookmarks, demoMode]);
 
   useEffect(() => {
     try {

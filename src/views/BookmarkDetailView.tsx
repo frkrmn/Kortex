@@ -209,7 +209,9 @@ export const BookmarkDetailView: React.FC = () => {
                 <div className="flex-1">
                   <span className="font-semibold block">AI Enrichment Incomplete</span>
                   <p className="text-[11px] text-amber-700 mt-0.5">
-                    Click "Re-analyze" above to retry AI processing.
+                    {dataMode === 'demo'
+                      ? 'Use Re-analyze above to try again.'
+                      : 'The original bookmark is still available.'}
                   </p>
                 </div>
               </div>

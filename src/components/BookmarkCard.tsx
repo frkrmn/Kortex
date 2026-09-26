@@ -266,7 +266,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-700">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                AI · Organizing will resume later
+                AI · Organization unavailable right now
               </span>
             </div>
           )}

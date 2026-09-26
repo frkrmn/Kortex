@@ -23,6 +23,7 @@ import { Bookmark } from '../types';
 export const BookmarkDetailView: React.FC = () => {
   const { params, navigate } = useRouter();
   const {
+    dataMode,
     getBookmark,
     getRelatedBookmarks,
     collections,
@@ -177,7 +178,7 @@ export const BookmarkDetailView: React.FC = () => {
                 </h3>
               </div>
 
-              <button
+              {dataMode === 'demo' && <button
                 onClick={() => reprocessBookmark(bookmark.id)}
                 disabled={bookmark.enrichment_status === 'processing'}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg border border-[#C7D2FE] transition-colors disabled:opacity-50 cursor-pointer"
@@ -185,7 +186,7 @@ export const BookmarkDetailView: React.FC = () => {
               >
                 <RefreshCw className={`w-3 h-3 ${bookmark.enrichment_status === 'processing' ? 'animate-spin' : ''}`} />
                 <span>{bookmark.enrichment_status === 'processing' ? 'Analyzing...' : 'Re-analyze'}</span>
-              </button>
+              </button>}
             </div>
 
             {/* Processing Banner */}
@@ -215,8 +216,9 @@ export const BookmarkDetailView: React.FC = () => {
             )}
 
             <p className="text-xs leading-relaxed text-[#383834]">
-              {bookmark.ai_summary || (bookmark.enrichment_status === 'processing' ? 'Generating summary...' : 'No AI summary generated yet.')}
+              {bookmark.ai_summary || (bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending' ? 'AI · Organizing...' : 'No AI summary generated yet.')}
             </p>
+            {bookmark.ai_category && <p className="text-xs text-[#595954]">Category · <span className="font-semibold">{bookmark.ai_category}</span></p>}
 
             {bookmark.why_saved_insight && (
               <div className="pt-3 border-t border-[#F0F0EC] space-y-1">
@@ -271,13 +273,13 @@ export const BookmarkDetailView: React.FC = () => {
                     >
                       {t}
                     </button>
-                    <button
+                    {dataMode === 'demo' && <button
                       onClick={() => removeTopicFromBookmark(bookmark.id, t)}
                       title={`Remove topic "${t}"`}
                       className="text-blue-400 hover:text-rose-600 rounded p-0.5 hover:bg-rose-50 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
-                    </button>
+                    </button>}
                   </span>
                 ))}
               </div>

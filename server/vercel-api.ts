@@ -6,6 +6,7 @@ import { liveApi } from './live-api';
 import { finishLiveXOAuth } from './sources/x-live';
 import { LiveStripeService } from './economics/live-stripe';
 import { SmartSyncService } from './economics/smart-sync';
+import { enrichmentControls, runControlledGeminiEnrichment } from './ai/live-gemini-enrichment';
 import { ProviderBudgetService } from './economics/provider-budget';
 
 const app = express();
@@ -49,6 +50,17 @@ app.use((req, res) => {
     void SmartSyncService.run().then(result => res.json(result)).catch(error => {
       console.error('Smart Sync failure:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Smart Sync failed.' });
+    });
+    return;
+  }
+  if (route === '/internal/gemini-enrichment' && req.method === 'GET') {
+    if (!process.env.CRON_SECRET || req.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+      res.status(401).json({ error: 'Unauthorized.' }); return;
+    }
+    const controls = enrichmentControls();
+    if (!controls.enabled || controls.rolloutCap === 0) { res.json({ enabled: false, attempted: 0 }); return; }
+    void runControlledGeminiEnrichment().then(result => res.json(result)).catch(() => {
+      if (!res.headersSent) res.status(503).json({ error: 'Controlled enrichment unavailable.' });
     });
     return;
   }

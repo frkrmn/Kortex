@@ -2,7 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "outputDirectory": "dist",
-  "crons": [{ "path": "/api/internal/smart-sync", "schedule": "0 8 * * *" }],
+  "crons": [
+    { "path": "/api/internal/smart-sync", "schedule": "0 8 * * *" },
+    { "path": "/api/internal/gemini-enrichment", "schedule": "0 9 * * *" }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index?__path=$1" },
     { "source": "/(.*)", "destination": "/index.html" }

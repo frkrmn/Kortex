@@ -46,7 +46,9 @@ export interface Bookmark {
   is_read: boolean;
   is_favorite: boolean;
   ai_summary: string;
+  ai_category?: import('./config/enrichment').EnrichmentCategory;
   topics: string[];
+  key_concepts?: string[];
   keywords: string[];
   collection_ids?: string[];
   why_saved_insight?: string;

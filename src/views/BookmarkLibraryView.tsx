@@ -15,13 +15,15 @@ import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { Bookmark } from '../types';
 import { api } from '../lib/api';
+import { ENRICHMENT_CATEGORIES } from '../config/enrichment';
+import { categoryCounts, filterEnrichedBookmarks, isEnrichmentCategory, topicCounts } from '../lib/enrichment-filters';
 
 export const BookmarkLibraryView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
   const {
+    dataMode,
     bookmarks,
     collections,
-    topics,
     bookmarkViewMode,
     enrichmentStatus,
     setBookmarkViewMode,
@@ -35,6 +37,7 @@ export const BookmarkLibraryView: React.FC = () => {
 
   // URL query params
   const urlTopic = searchParams.get('topic') || 'all';
+  const urlCategory = searchParams.get('category') || 'all';
   const urlFilter = (searchParams.get('filter') as 'all' | 'unread' | 'favorites') || 'all';
   const urlSort = (searchParams.get('sort') as 'newest' | 'oldest') || 'newest';
   const urlSearch = searchParams.get('q') || '';
@@ -56,7 +59,7 @@ export const BookmarkLibraryView: React.FC = () => {
   // Hybrid search execution
   useEffect(() => {
     const trimmed = searchQuery.trim();
-    if (!trimmed) {
+    if (!trimmed || urlCategory !== 'all' || urlTopic !== 'all') {
       setHybridResults(null);
       setIsSearchingHybrid(false);
       return;
@@ -78,7 +81,7 @@ export const BookmarkLibraryView: React.FC = () => {
     }, 180);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, urlTopic, urlFilter]);
+  }, [searchQuery, urlCategory, urlTopic, urlFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,16 +101,16 @@ export const BookmarkLibraryView: React.FC = () => {
     navigate(`/bookmarks${qs ? `?${qs}` : ''}`);
   };
 
-  const localFiltered = searchBookmarks(searchQuery, {
-    topic: urlTopic,
+  const localFiltered = searchBookmarks('', {
     filter: urlFilter,
     sort: urlSort,
   });
 
-  const displayedBookmarks: Bookmark[] =
-    searchQuery.trim() && hybridResults
+  const candidateBookmarks: Bookmark[] =
+    searchQuery.trim() && urlCategory === 'all' && urlTopic === 'all' && hybridResults
       ? hybridResults.results.map((r) => r.item)
       : localFiltered;
+  const displayedBookmarks = filterEnrichedBookmarks(candidateBookmarks, urlCategory, urlTopic, searchQuery);
 
   // Match lookup
   const matchMap = new Map<string, { matchType: 'lexical' | 'semantic' | 'hybrid'; score: number }>();
@@ -117,10 +120,9 @@ export const BookmarkLibraryView: React.FC = () => {
     });
   }
 
-  const availableTopics = [
-    { slug: 'all', name: 'All Topics' },
-    ...topics.map((t) => ({ slug: t.slug || t.name.toLowerCase(), name: t.name })),
-  ];
+  const selectedCategory = isEnrichmentCategory(urlCategory) ? urlCategory : null;
+  const counts = categoryCounts(bookmarks);
+  const availableTopics = selectedCategory ? topicCounts(bookmarks, selectedCategory) : [];
 
   const pendingCount = bookmarks.filter(
     (b) => !b.ai_summary || b.enrichment_status === 'pending' || b.enrichment_status === 'failed'
@@ -139,7 +141,7 @@ export const BookmarkLibraryView: React.FC = () => {
 
         {/* View Mode & Reprocess Controls */}
         <div className="flex items-center gap-2 self-start sm:self-center">
-          {pendingCount > 0 && !enrichmentStatus.isProcessing && (
+          {dataMode === 'demo' && pendingCount > 0 && !enrichmentStatus.isProcessing && (
             <button
               onClick={reprocessAllBookmarks}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
@@ -228,6 +230,18 @@ export const BookmarkLibraryView: React.FC = () => {
 
       {/* Filter Bar: Status Tabs, Topic Chips & Sort */}
       <div className="space-y-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Categories">
+          <button onClick={() => updateUrlParams({ category: 'all', topic: 'all' })}
+            className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap border ${urlCategory === 'all' ? 'bg-[#171717] text-white' : 'bg-white text-[#70706B]'}`}>
+            All ({bookmarks.length})
+          </button>
+          {ENRICHMENT_CATEGORIES.map(category => (
+            <button key={category} onClick={() => updateUrlParams({ category, topic: 'all' })}
+              className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap border ${urlCategory === category ? 'bg-[#171717] text-white' : 'bg-white text-[#70706B]'}`}>
+              {category} ({counts[category]})
+            </button>
+          ))}
+        </div>
         {/* Status Filter Tabs */}
         <div className="flex items-center justify-between gap-4 flex-wrap pb-1">
           <div className="flex items-center gap-1 p-1 bg-[#FFFFFF] border border-[#E8E8E5] rounded-xl shadow-2xs">
@@ -278,27 +292,27 @@ export const BookmarkLibraryView: React.FC = () => {
         </div>
 
         {/* Horizontally Scrollable Topic Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {availableTopics.map((topic) => {
+        {selectedCategory && <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Topics">
+          {[['all', counts[selectedCategory]] as const, ...availableTopics].map(([topic, count]) => {
             const isSelected =
-              topic.slug === 'all'
+              topic === 'all'
                 ? urlTopic === 'all'
-                : urlTopic.toLowerCase() === topic.slug.toLowerCase() || urlTopic.toLowerCase() === topic.name.toLowerCase();
+                : urlTopic.toLowerCase() === topic.toLowerCase();
             return (
               <button
-                key={topic.slug}
-                onClick={() => updateUrlParams({ topic: topic.slug === 'all' ? 'all' : topic.slug })}
+                key={topic}
+                onClick={() => updateUrlParams({ topic })}
                 className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border cursor-pointer ${
                   isSelected
                     ? 'bg-[#EEF4FF] border-[#BFDBFE] text-[#1E3A8A] font-semibold'
                     : 'bg-[#FFFFFF] border-[#E8E8E5] text-[#70706B] hover:text-[#171717] hover:border-[#D0D0CB]'
                 }`}
               >
-                {topic.name}
+                {topic === 'all' ? 'All topics' : topic} ({count})
               </button>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       {/* Search Result Overview Bar */}
@@ -306,7 +320,7 @@ export const BookmarkLibraryView: React.FC = () => {
         <div className="flex items-center justify-between p-3 bg-[#FFFFFF] border border-[#E8E8E5] rounded-xl text-xs text-[#70706B] shadow-2xs">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-[#171717]">
-              {hybridResults ? hybridResults.total : displayedBookmarks.length} result(s)
+              {displayedBookmarks.length} result(s)
             </span>
             <span>for <span className="font-medium text-[#171717]">"{searchQuery.trim()}"</span></span>
             {hybridResults && (

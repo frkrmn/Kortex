@@ -120,6 +120,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               </div>
               <div className="flex items-center gap-2 text-[10px] text-[#8A8A85] mt-0.5">
                 <span>{formattedDate}</span>
+                {bookmark.ai_category && <span className="rounded bg-[#EEF4FF] px-1.5 py-0.5 text-[#1E3A8A]">{bookmark.ai_category}</span>}
                 <span>•</span>
                 <span className="capitalize font-medium text-[#70706B]">X post</span>
                 {!bookmark.is_read && (
@@ -265,9 +266,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-700">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                AI analysis unavailable
+                AI · Organizing will resume later
               </span>
             </div>
+          )}
+          {(bookmark.enrichment_status === 'pending' || bookmark.enrichment_status === 'processing') && !bookmark.ai_summary && (
+            <span className="text-[11px] text-[#70706B]">AI · Organizing...</span>
           )}
 
           {/* AI Key Insight Card */}
@@ -298,6 +302,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       <div className="pt-3 border-t border-[#F2F2EE] flex items-center justify-between gap-3 flex-wrap text-xs">
         {/* Topic Pills */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          {bookmark.ai_category && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[#EEF4FF] text-[#1E3A8A]">{bookmark.ai_category}</span>}
           {(bookmark.topics || []).map((topic) => (
             <button
               key={topic}

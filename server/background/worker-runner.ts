@@ -6,6 +6,7 @@ import { enrichmentPipeline } from '../ai/enrichment-pipeline';
 import { getEmbeddingPipeline } from '../ai/embedding-pipeline';
 import { store } from '../store';
 import { JobQueueRecord, WorkerMetrics } from './types';
+import { isXAutoSyncEnabled } from '../config/scheduled-sync';
 
 export class BackgroundWorkerRunner {
   private static instance: BackgroundWorkerRunner;
@@ -83,7 +84,7 @@ export class BackgroundWorkerRunner {
       recoveredStale = await jobQueue.recoverStaleJobs();
 
       // 2. Evaluate scheduled syncs if enabled
-      const syncEnabled = process.env.X_SYNC_ENABLED !== 'false';
+      const syncEnabled = isXAutoSyncEnabled();
       if (syncEnabled) {
         dueSyncsEnqueued = await syncScheduler.evaluateDueAccounts();
       }

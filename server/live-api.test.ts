@@ -61,6 +61,14 @@ test('live API requires a verified session and scopes bookmark lookup to its own
         is_favorite: false, metadata: {}, created_at: '2026-01-01T00:00:00Z',
       });
     }
+    if (url.pathname === '/rest/v1/saved_item_enrichments') {
+      const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
+      assert.equal(owner, token);
+      assert.equal(url.searchParams.get('saved_item_id'), `in.(user-a-bookmark)`);
+      return Response.json([{ saved_item_id: 'user-a-bookmark', status: 'completed',
+        summary: 'Private owner summary', category: 'Books', topics: ['Reading'],
+        key_concepts: ['Reference'], model: 'gemini-3.5-flash-lite', enriched_at: '2026-01-02T00:00:00Z' }]);
+    }
     if (url.pathname === '/rest/v1/collections') {
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       const id = url.searchParams.get('id')?.replace(/^eq\./, '');
@@ -103,6 +111,7 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     assert.equal(own.result.code, 200);
     assert.equal((own.result.body as { user_id: string }).user_id, 'user-a');
     assert.equal((own.result.body as { bookmark_created_at: string }).bookmark_created_at, '2025-12-20T12:00:00Z');
+    assert.equal((own.result.body as { ai_category: string }).ai_category, 'Books');
 
     const crossTenant = response();
     await liveApi(request('/bookmarks/user-b-bookmark', 'user-a'), crossTenant.res);

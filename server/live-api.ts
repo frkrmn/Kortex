@@ -11,6 +11,9 @@ import { recordImportEvent } from './economics/analytics';
 import { economicsAdmin } from './economics/credit-service';
 import { isXSyncE2ETestUser } from './sources/x-e2e-allowlist';
 import { sortBookmarksNewestFirst } from '../src/lib/bookmark-order';
+import { enqueueOwnedNewBookmarks } from './ai/live-gemini-enrichment';
+import { attachLiveEnrichments } from './ai/live-enrichment-view';
+import { GEMINI_ENRICHMENT_MODEL, GEMINI_PROMPT_VERSION, GEMINI_SCHEMA_VERSION } from './ai/gemini-v1';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -64,7 +67,19 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Recallly library is still available.' });
         return;
       }
-      if (result.success) await recordImportEvent(user.id, 'import_completed', { imported: result.addedCount, read: result.discoveredCount });
+      if (result.success) {
+        await recordImportEvent(user.id, 'import_completed', { imported: result.addedCount, read: result.discoveredCount });
+        if (result.items?.length) {
+          try {
+            const queued = await enqueueOwnedNewBookmarks(user.id, result.items.map(item => item.id));
+            if (queued) result.items = result.items.map(item => ({ ...item, enrichment_status: 'pending' as const }));
+          } catch (error) {
+            // Bookmark persistence and X sync have already succeeded.
+            console.warn(JSON.stringify({ event: 'gemini_enqueue_failed', userId: user.id,
+              kind: error && typeof error === 'object' && 'code' in error ? String(error.code) : 'unknown' }));
+          }
+        }
+      }
       else if (result.statusCode === 402) await recordImportEvent(user.id, 'import_credit_limit_reached');
       res.status(result.success ? 200 : ('statusCode' in result ? result.statusCode : 409)).json(result);
       return;
@@ -293,6 +308,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       let items = sortBookmarksNewestFirst<ReturnType<typeof mapSavedItemRowToBookmark>>(
         data.map(row => mapSavedItemRowToBookmark(row))
       );
+      items = await attachLiveEnrichments(db, user.id, items);
       if (typeof req.query.query === 'string' && req.query.query.trim()) {
         const term = req.query.query.toLowerCase().trim();
         items = items.filter(item => `${item.content} ${item.author_name} ${item.ai_summary}`.toLowerCase().includes(term));
@@ -333,7 +349,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       const { data, error } = await db.from('saved_items').select('*').eq('id', bookmarkId).eq('user_id', user.id).maybeSingle();
       if (error) throw error;
       if (!data) { res.status(404).json({ error: 'Bookmark not found.' }); return; }
-      res.json(mapSavedItemRowToBookmark(data));
+      res.json((await attachLiveEnrichments(db, user.id, [mapSavedItemRowToBookmark(data)]))[0]);
       return;
     }
     if (bookmarkId && method === 'PATCH') {
@@ -461,13 +477,13 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if (route === '/ai/enrichment-status' && method === 'GET') {
-      const { data, error } = await db.from('processing_jobs').select('*').eq('user_id', user.id).eq('job_type', 'enrichment')
-        .order('created_at', { ascending: false }).limit(100);
+      const { data, error } = await db.from('saved_item_enrichments').select('status')
+        .eq('user_id', user.id).eq('prompt_version', GEMINI_PROMPT_VERSION).eq('schema_version', GEMINI_SCHEMA_VERSION);
       if (error) throw error;
       const count = (status: string) => data.filter(job => job.status === status).length;
-      res.json({ isProcessing: count('running') + count('processing') > 0, activeCount: count('running') + count('processing'),
+      res.json({ isProcessing: count('processing') > 0, activeCount: count('processing'),
         pendingCount: count('pending'), completedCount: count('completed'), failedCount: count('failed'),
-        provider: 'server', model: 'configured', version: 'v1', recentJobs: data.slice(0, 10) });
+        provider: 'gemini', model: GEMINI_ENRICHMENT_MODEL, version: GEMINI_PROMPT_VERSION, recentJobs: [] });
       return;
     }
     if (route === '/embeddings/status' && method === 'GET') {

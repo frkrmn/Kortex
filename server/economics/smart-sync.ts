@@ -2,10 +2,11 @@ import { economicsAdmin, CreditService } from './credit-service';
 import { ProviderBudgetService } from './provider-budget';
 import { syncLiveX } from '../sources/x-live';
 import { importConfig } from './config';
+import { isXAutoSyncEnabled } from '../config/scheduled-sync';
 
 export class SmartSyncService {
   static async run() {
-    if (process.env.X_SYNC_ENABLED === 'false') return { synced: 0, skipped: 0 };
+    if (!isXAutoSyncEnabled()) return { synced: 0, skipped: 0 };
     const db = economicsAdmin();
     const limit = Math.max(1, Math.min(20, Number(process.env.X_SMART_SYNC_DAILY_BATCH_SIZE) || 3));
     const dueBefore = new Date(Date.now() - 24 * 3600000).toISOString();

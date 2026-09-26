@@ -35,8 +35,27 @@ export const BookmarkDetailView: React.FC = () => {
   } = useDemoStore();
 
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
+  const [vectorRelated, setVectorRelated] = useState<{ bookmark: Bookmark; similarity: number }[]>([]);
 
   const bookmark = getBookmark(params.id);
+
+  React.useEffect(() => {
+    if (!bookmark) return;
+
+    let isSubscribed = true;
+    api.getRelatedBookmarks(bookmark.id, 3)
+      .then((items) => {
+        if (isSubscribed && items && items.length > 0) {
+          setVectorRelated(items);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch vector-related bookmarks:', err);
+      });
+    return () => {
+      isSubscribed = false;
+    };
+  }, [bookmark?.id]);
 
   if (!bookmark) {
     return (
@@ -56,23 +75,6 @@ export const BookmarkDetailView: React.FC = () => {
   }
 
   const fallbackRelated = getRelatedBookmarks(bookmark.id, 3);
-  const [vectorRelated, setVectorRelated] = useState<{ bookmark: Bookmark; similarity: number }[]>([]);
-
-  React.useEffect(() => {
-    let isSubscribed = true;
-    api.getRelatedBookmarks(bookmark.id, 3)
-      .then((items) => {
-        if (isSubscribed && items && items.length > 0) {
-          setVectorRelated(items);
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not fetch vector-related bookmarks:', err);
-      });
-    return () => {
-      isSubscribed = false;
-    };
-  }, [bookmark.id]);
 
   const relatedBookmarks = vectorRelated.length > 0
     ? vectorRelated.map(r => ({ ...r.bookmark, _similarity: r.similarity }))

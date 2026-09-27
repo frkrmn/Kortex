@@ -15,44 +15,63 @@ function boundedInt(value: string | undefined, fallback: number, maximum: number
 
 export function enrichmentControls(env: NodeJS.ProcessEnv = process.env) {
   const ownerId = env.GEMINI_ENRICHMENT_OWNER_USER_ID;
+  const normalizedOwnerId = ownerId && UUID.test(ownerId) ? ownerId.toLowerCase() : null;
+  const rolloutCap = boundedInt(env.GEMINI_ENRICHMENT_ROLLOUT_CAP, 0, 10000);
+  const queueEnabled = Boolean(normalizedOwnerId) && rolloutCap > 0;
+  const providerEnabled = env.GEMINI_ENRICHMENT_ENABLED === 'true'
+    && env.GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED === 'true'
+    && Boolean(env.GEMINI_API_KEY);
   return {
-    enabled: env.GEMINI_ENRICHMENT_ENABLED === 'true' && env.GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED === 'true'
-      && Boolean(ownerId && UUID.test(ownerId)) && Boolean(env.GEMINI_API_KEY),
-    ownerId: ownerId && UUID.test(ownerId) ? ownerId : null,
+    enabled: queueEnabled && providerEnabled,
+    queueEnabled,
+    providerEnabled,
+    ownerId: normalizedOwnerId,
     batchSize: boundedInt(env.GEMINI_ENRICHMENT_BATCH_SIZE, 5, 20),
     concurrency: boundedInt(env.GEMINI_ENRICHMENT_CONCURRENCY, 1, 2),
-    rolloutCap: boundedInt(env.GEMINI_ENRICHMENT_ROLLOUT_CAP, 0, 10000),
+    rolloutCap,
   };
 }
 
 export function isControlledEnrichmentOwner(userId: string, env: NodeJS.ProcessEnv = process.env) {
   const controls = enrichmentControls(env);
-  return controls.enabled && controls.ownerId === userId && controls.rolloutCap > 0;
+  return controls.queueEnabled && controls.ownerId === userId.toLowerCase();
 }
 
 export async function enqueueOwnedNewBookmarks(userId: string, savedItemIds: string[]) {
-  if (!isControlledEnrichmentOwner(userId) || savedItemIds.length === 0) return 0;
+  if (savedItemIds.length === 0) return 0;
+  if (!isControlledEnrichmentOwner(userId)) {
+    const controls = enrichmentControls();
+    console.info(JSON.stringify({ event: 'gemini_enqueue_skipped', userId, newSavedItems: savedItemIds.length,
+      reason: controls.ownerId ? 'controlled_owner_mismatch' : 'controlled_owner_not_configured' }));
+    return 0;
+  }
+  const ownerId = enrichmentControls().ownerId!;
   const db = economicsAdmin();
   const uniqueIds = [...new Set(savedItemIds)];
   const { data: owned, error: ownershipError } = await db.from('saved_items')
-    .select('id').eq('user_id', userId).eq('source', 'twitter').in('id', uniqueIds);
+    .select('id').eq('user_id', ownerId).eq('source', 'twitter').in('id', uniqueIds);
   if (ownershipError) throw ownershipError;
   const rows = (owned || []).map(item => ({
-    saved_item_id: item.id, user_id: userId, provider: 'gemini', model: GEMINI_ENRICHMENT_MODEL,
+    saved_item_id: item.id, user_id: ownerId, provider: 'gemini', model: GEMINI_ENRICHMENT_MODEL,
     prompt_version: GEMINI_PROMPT_VERSION, schema_version: GEMINI_SCHEMA_VERSION,
   }));
   if (!rows.length) return 0;
-  const { error } = await db.from('saved_item_enrichments').upsert(rows, {
+  const { data: inserted, error } = await db.from('saved_item_enrichments').upsert(rows, {
     onConflict: 'saved_item_id,prompt_version,schema_version', ignoreDuplicates: true,
-  });
+  }).select('saved_item_id');
   if (error) throw error;
-  return rows.length;
+  const queued = inserted?.length || 0;
+  console.info(JSON.stringify({ event: 'gemini_enqueue_result', userId: ownerId, newSavedItems: uniqueIds.length,
+    eligibleForEnrichment: rows.length, immediateEnqueued: queued }));
+  return queued;
 }
 
 /** Queues a bounded owner-only slice of existing records. Safe to resume. */
 export async function queueControlledBackfill(limit?: number) {
   const controls = enrichmentControls();
-  if (!controls.enabled || !controls.ownerId || !controls.rolloutCap) throw new Error('Controlled Gemini enrichment is disabled.');
+  if (!controls.queueEnabled || !controls.ownerId || !controls.rolloutCap) {
+    throw new Error('Controlled Gemini enrichment owner is not configured.');
+  }
   const db = economicsAdmin();
   const requested = Math.min(limit ?? controls.batchSize, controls.batchSize);
   const { data: existing, error: existingError } = await db.from('saved_item_enrichments')
@@ -64,7 +83,8 @@ export async function queueControlledBackfill(limit?: number) {
     .eq('user_id', controls.ownerId).eq('source', 'twitter').order('saved_at', { ascending: false }).limit(1000);
   if (error) throw error;
   const remaining = Math.max(0, controls.rolloutCap - used.size);
-  const candidates = (items || []).filter(item => !used.has(item.id)
+  const candidates = (items || []).filter(item => item.user_id === controls.ownerId && item.source === 'twitter'
+    && !used.has(item.id)
     && !['unavailable', 'deleted', 'restricted'].includes(item.external_content_status || 'available'))
     .slice(0, Math.min(requested, remaining));
   return enqueueOwnedNewBookmarks(controls.ownerId, candidates.map(item => item.id));
@@ -194,12 +214,23 @@ const scheduledEnrichmentDependencies: ScheduledEnrichmentDependencies = {
 
 export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrichmentDependencies = scheduledEnrichmentDependencies) {
   const controls = enrichmentControls();
-  if (!controls.enabled || !controls.ownerId || !controls.rolloutCap) {
+  if (!controls.queueEnabled || !controls.ownerId || !controls.rolloutCap) {
+    console.info(JSON.stringify({ event: 'gemini_scheduled_run', queueEnabled: false, providerEnabled: controls.providerEnabled,
+      queued: 0, attempted: 0, completed: 0, reason: 'controlled_owner_not_configured' }));
     return { enabled: false, queued: 0, attempted: 0, completed: 0, failed: 0, retries: 0,
       inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
   }
   const queued = await dependencies.queue();
+  if (!controls.enabled) {
+    console.info(JSON.stringify({ event: 'gemini_scheduled_run', userId: controls.ownerId, queueEnabled: true,
+      providerEnabled: false, queued, attempted: 0, completed: 0, reason: 'provider_disabled' }));
+    return { enabled: false, queued, attempted: 0, completed: 0, failed: 0, retries: 0,
+      inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
+  }
   const result = await dependencies.run();
+  console.info(JSON.stringify({ event: 'gemini_scheduled_run', userId: controls.ownerId, queueEnabled: true,
+    providerEnabled: true, queued, attempted: result.attempted, completed: result.completed,
+    failed: result.failed, retries: result.retries }));
   return { enabled: true, queued, ...result };
 }
 

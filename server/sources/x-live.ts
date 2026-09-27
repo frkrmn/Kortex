@@ -388,7 +388,9 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     ]);
     if (savedIds.length) {
       try {
-        await dependencies.enqueueNewBookmarks(userId, savedIds);
+        const queued = await dependencies.enqueueNewBookmarks(userId, savedIds);
+        console.info(JSON.stringify({ event: 'gemini_enqueue_after_x_sync', userId,
+          newSavedItems: savedIds.length, immediateEnqueued: queued }));
       } catch {
         // Bookmark persistence is authoritative. The scheduled Gemini runner
         // recovers missing idempotent queue rows on its next invocation.

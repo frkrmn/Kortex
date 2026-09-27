@@ -33,7 +33,7 @@ export const GEMINI_RESPONSE_SCHEMA = {
   properties: {
     summary: { type: 'string' },
     category: { type: 'string', enum: [...ENRICHMENT_CATEGORIES] },
-    topics: { type: 'array', items: { type: 'string' } },
-    key_concepts: { type: 'array', items: { type: 'string' } },
+    topics: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+    key_concepts: { type: 'array', items: { type: 'string' }, maxItems: 6 },
   },
 } as const;

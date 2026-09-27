@@ -36,6 +36,7 @@ test('controlled rollout fails closed for absent config and any other user', () 
   assert.equal(isControlledEnrichmentOwner(owner, { ...enabled, GEMINI_ENRICHMENT_OWNER_USER_ID: owner.toUpperCase() }), true);
   assert.equal(isControlledEnrichmentOwner(owner, { ...enabled, GEMINI_ENRICHMENT_ENABLED: 'false' }), true);
   assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_ENABLED: 'false' }).providerEnabled, false);
+  assert.equal(enrichmentControls({ ...enabled, GEMINI_API_KEY: undefined }).apiKeyConfigured, false);
   assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_BATCH_SIZE: '999' }).batchSize, 20);
 });
 

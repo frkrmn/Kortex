@@ -18,13 +18,17 @@ export function enrichmentControls(env: NodeJS.ProcessEnv = process.env) {
   const normalizedOwnerId = ownerId && UUID.test(ownerId) ? ownerId.toLowerCase() : null;
   const rolloutCap = boundedInt(env.GEMINI_ENRICHMENT_ROLLOUT_CAP, 0, 10000);
   const queueEnabled = Boolean(normalizedOwnerId) && rolloutCap > 0;
-  const providerEnabled = env.GEMINI_ENRICHMENT_ENABLED === 'true'
-    && env.GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED === 'true'
-    && Boolean(env.GEMINI_API_KEY);
+  const providerFlagEnabled = env.GEMINI_ENRICHMENT_ENABLED === 'true';
+  const freeTierConfirmed = env.GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED === 'true';
+  const apiKeyConfigured = Boolean(env.GEMINI_API_KEY);
+  const providerEnabled = providerFlagEnabled && freeTierConfirmed && apiKeyConfigured;
   return {
     enabled: queueEnabled && providerEnabled,
     queueEnabled,
     providerEnabled,
+    providerFlagEnabled,
+    freeTierConfirmed,
+    apiKeyConfigured,
     ownerId: normalizedOwnerId,
     batchSize: boundedInt(env.GEMINI_ENRICHMENT_BATCH_SIZE, 5, 20),
     concurrency: boundedInt(env.GEMINI_ENRICHMENT_CONCURRENCY, 1, 2),
@@ -216,6 +220,8 @@ export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrich
   const controls = enrichmentControls();
   if (!controls.queueEnabled || !controls.ownerId || !controls.rolloutCap) {
     console.info(JSON.stringify({ event: 'gemini_scheduled_run', queueEnabled: false, providerEnabled: controls.providerEnabled,
+      providerFlagEnabled: controls.providerFlagEnabled, freeTierConfirmed: controls.freeTierConfirmed,
+      apiKeyConfigured: controls.apiKeyConfigured,
       queued: 0, attempted: 0, completed: 0, reason: 'controlled_owner_not_configured' }));
     return { enabled: false, queued: 0, attempted: 0, completed: 0, failed: 0, retries: 0,
       inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
@@ -223,7 +229,9 @@ export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrich
   const queued = await dependencies.queue();
   if (!controls.enabled) {
     console.info(JSON.stringify({ event: 'gemini_scheduled_run', userId: controls.ownerId, queueEnabled: true,
-      providerEnabled: false, queued, attempted: 0, completed: 0, reason: 'provider_disabled' }));
+      providerEnabled: false, providerFlagEnabled: controls.providerFlagEnabled,
+      freeTierConfirmed: controls.freeTierConfirmed, apiKeyConfigured: controls.apiKeyConfigured,
+      queued, attempted: 0, completed: 0, reason: 'provider_disabled' }));
     return { enabled: false, queued, attempted: 0, completed: 0, failed: 0, retries: 0,
       inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
   }

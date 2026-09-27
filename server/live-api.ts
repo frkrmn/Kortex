@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { mapSavedItemRowToBookmark, mapCollectionRowToCollection, mapProfileRowToProfile, mapConnectedAccountSafeToAccount, mapDigestRowToDigest, mapDigestSettingsRowToSettings, mapTopicRowToTopic } from '../src/lib/repositories/supabase/mappers';
-import { PLANS } from '../src/config/plans';
+import { DEFAULT_TRIAL_DAYS, PLANS } from '../src/config/plans';
 import { beginLiveXOAuth, disconnectLiveX, syncLiveX, isLiveXConfigured } from './sources/x-live';
 import { CreditService } from './economics/credit-service';
 import { importConfig, isImportPackKey } from './economics/config';
@@ -94,9 +94,24 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if (route === '/user/profile' && method === 'PATCH') {
-      const updates = Object.fromEntries(['display_name', 'avatar_url', 'timezone'].filter(k =>
-        typeof req.body?.[k] === 'string'
-      ).map(k => [k, req.body[k]]));
+      const updates: Record<string, string> = {};
+      if (typeof req.body?.display_name === 'string') {
+        const displayName = req.body.display_name.trim().replace(/\s+/g, ' ');
+        if (!displayName || displayName.length > 80) { res.status(400).json({ error: 'Display name must be between 1 and 80 characters.' }); return; }
+        updates.display_name = displayName;
+      }
+      if (typeof req.body?.avatar_url === 'string') {
+        const avatarUrl = req.body.avatar_url.trim();
+        if (avatarUrl && (avatarUrl.length > 2048 || !/^https:\/\//i.test(avatarUrl))) { res.status(400).json({ error: 'Avatar URL must be a valid HTTPS URL.' }); return; }
+        updates.avatar_url = avatarUrl;
+      }
+      if (typeof req.body?.timezone === 'string') {
+        const timezone = req.body.timezone.trim();
+        try { if (!timezone || timezone.length > 100) throw new Error(); new Intl.DateTimeFormat('en', { timeZone: timezone }); }
+        catch { res.status(400).json({ error: 'Timezone is invalid.' }); return; }
+        updates.timezone = timezone;
+      }
+      if (!Object.keys(updates).length) { res.status(400).json({ error: 'No valid profile fields supplied.' }); return; }
       const { data, error } = await db.from('profiles').update(updates).eq('user_id', user.id).select().single();
       if (error) throw error;
       res.json(mapProfileRowToProfile(data, user.email));
@@ -200,14 +215,17 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       return;
     }
     if ((route === '/subscription' || route === '/billing/subscription') && method === 'GET') {
-      const { data, error } = await db.from('subscriptions').select('user_id, provider, plan, status, current_period_start, current_period_end, cancel_at_period_end').eq('user_id', user.id).maybeSingle();
+      const { data, error } = await db.from('subscriptions').select('user_id, provider, provider_customer_id, plan, status, billing_interval, current_period_start, current_period_end, cancel_at_period_end, trial_start, trial_end, has_used_trial').eq('user_id', user.id).maybeSingle();
       if (error) throw error;
-      res.json(data || { user_id: user.id, provider: 'stripe', plan: 'free', status: 'active', current_period_end: new Date(0).toISOString() });
+      if (data) {
+        const { provider_customer_id, billing_interval, ...safeSubscription } = data;
+        res.json({ ...safeSubscription, interval: billing_interval, has_billing_account: Boolean(provider_customer_id) });
+      } else res.json({ user_id: user.id, provider: 'stripe', plan: 'free', status: 'active', current_period_end: new Date(0).toISOString(), has_billing_account: false });
       return;
     }
     if (route === '/billing/config' && method === 'GET') {
       const config = importConfig();
-      res.json({ plans: PLANS, defaultTrialDays: 0, isStripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
+      res.json({ plans: PLANS, defaultTrialDays: DEFAULT_TRIAL_DAYS, isStripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
         proMonthlyImports: config.proMonthlyCredits,
         importPacks: Object.entries(config.packs).filter(([, p]) => p.credits > 0 && p.priceId)
           .map(([key, p]) => ({ key, credits: p.credits })) });
@@ -513,20 +531,34 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
     }
 
     if (route === '/data/export' && method === 'POST') {
-      const [profile, bookmarks, collections, digests] = await Promise.all([
+      const [profile, bookmarks, collections, digests, subscription] = await Promise.all([
         db.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
         db.from('saved_items').select('*').eq('user_id', user.id),
         db.from('collections').select('*').eq('user_id', user.id),
         db.from('digests').select('*').eq('user_id', user.id),
+        db.from('subscriptions').select('plan,status,billing_interval,current_period_start,current_period_end,cancel_at_period_end,trial_start,trial_end').eq('user_id', user.id).maybeSingle(),
       ]);
-      if (profile.error || bookmarks.error || collections.error || digests.error) {
-        throw profile.error || bookmarks.error || collections.error || digests.error;
+      if (profile.error || bookmarks.error || collections.error || digests.error || subscription.error) {
+        throw profile.error || bookmarks.error || collections.error || digests.error || subscription.error;
       }
-      res.setHeader('Content-Disposition', 'attachment; filename=kortex-data-export.json');
+      const collectionIds = (collections.data || []).map(row => row.id);
+      const memberships = collectionIds.length
+        ? await db.from('collection_items').select('collection_id,saved_item_id').in('collection_id', collectionIds)
+        : { data: [], error: null };
+      if (memberships.error) throw memberships.error;
+      const itemsByCollection = new Map<string, string[]>();
+      for (const item of memberships.data || []) itemsByCollection.set(item.collection_id, [...(itemsByCollection.get(item.collection_id) || []), item.saved_item_id]);
+      const mappedBookmarks = (bookmarks.data || []).map(row => mapSavedItemRowToBookmark(row));
+      const enrichedBookmarks = await attachLiveEnrichments(db, user.id, mappedBookmarks);
+      const mappedProfile = profile.data ? mapProfileRowToProfile(profile.data, user.email) : null;
+      if (mappedProfile) mappedProfile.plan = subscription.data?.plan === 'pro' ? 'pro' : subscription.data?.plan === 'free_trial' ? 'free_trial' : 'starter';
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Disposition', 'attachment; filename=recallly-data-export.json');
       res.json({
-        profile: profile.data ? mapProfileRowToProfile(profile.data, user.email) : null,
-        bookmarks: (bookmarks.data || []).map(row => mapSavedItemRowToBookmark(row)),
-        collections: (collections.data || []).map(row => mapCollectionRowToCollection(row)),
+        profile: mappedProfile,
+        subscription: subscription.data || { plan: 'free', status: 'active' },
+        bookmarks: enrichedBookmarks,
+        collections: (collections.data || []).map(row => mapCollectionRowToCollection(row, itemsByCollection.get(row.id) || [])),
         digests: (digests.data || []).map(row => mapDigestRowToDigest(row)),
         exportedAt: new Date().toISOString(),
       });
@@ -534,6 +566,10 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
     }
 
     if (route === '/data/clear' && method === 'POST') {
+      if (req.body?.confirmation !== 'DELETE MY LIBRARY') {
+        res.status(400).json({ error: 'Explicit library deletion confirmation is required.' });
+        return;
+      }
       const { error } = await db.rpc('clear_my_library');
       if (error) throw error;
       res.json({ success: true, message: 'Library data cleared.' });

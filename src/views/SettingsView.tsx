@@ -1,1083 +1,281 @@
-import React, { useState, useEffect } from 'react';
-import {
-  User,
-  Share2,
-  Sliders,
-  Download,
-  RotateCcw,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Shield,
-  Layers,
-  Sparkles,
-  RefreshCw,
-  Loader2,
-  Copy,
-  Check,
-  AlertCircle,
-  Unlink,
-  Lock,
-  Key,
-  Mail,
-  Calendar,
-  AlertTriangle,
-  Activity,
-  Send,
-  Eye,
-  Globe,
-} from 'lucide-react';
-import { useDemoStore } from '../lib/store/demo-store';
-import { api } from '../lib/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, Unlink } from 'lucide-react';
 import { BillingSettingsSection } from '../components/BillingSettingsSection';
-import { BackgroundReliabilitySection } from '../components/BackgroundReliabilitySection';
+import { useAuth } from '../lib/auth/auth-context';
+import { api } from '../lib/api';
+import { useRouter } from '../lib/router';
+import { SETTINGS_TABS, isCanonicalSettingsTab, resolveSettingsTab, settingsTabUrl } from '../lib/settings';
+import { useDemoStore } from '../lib/store/demo-store';
+
+function formatLastSync(timestamp?: string) {
+  if (!timestamp) return 'No successful sync yet';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return 'Sync time unavailable';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
 
 export const SettingsView: React.FC = () => {
+  const { profile, refreshSession, isLoading: isAuthLoading, authError } = useAuth();
+  const { searchParams, navigate } = useRouter();
   const {
-    profile,
-    updateProfile,
-    bookmarkViewMode,
-    setBookmarkViewMode,
-    bookmarks,
-    resetData,
-    showToast,
-    xStatus,
-    syncProgress,
-    syncXBookmarks,
-    disconnectXAccount,
-    refreshXStatus,
-    addImportedBookmarks,
-    digestSettings,
-    updateDigestSettings,
-    digests,
+    bookmarkViewMode, setBookmarkViewMode, showToast, xStatus, syncProgress,
+    syncXBookmarks, disconnectXAccount, refreshXStatus, addImportedBookmarks,
   } = useDemoStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'billing' | 'sources' | 'intelligence' | 'automation' | 'appearance' | 'data'>('account');
-  const [digestFreq, setDigestFreq] = useState<'weekly' | 'monthly'>('weekly');
-  const [summaryDetail, setSummaryDetail] = useState<'concise' | 'detailed'>('detailed');
-  const [autoCategorize, setAutoCategorize] = useState(true);
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
-  const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
-  const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
-  const [historyHasMore, setHistoryHasMore] = useState(false);
-  const [isImportingHistory, setIsImportingHistory] = useState(false);
-  useEffect(() => { setHistoryHasMore(Boolean(xStatus.hasPendingImport)); }, [xStatus.hasPendingImport]);
-
-  // Sync tab with URL search parameter
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get('tab');
-    if (tabParam === 'billing' || tabParam === 'subscription') {
-      setActiveTab('billing');
-    } else if (tabParam === 'automation' || tabParam === 'background') {
-      setActiveTab('automation');
-    }
-  }, []);
-
-  // Sources Tab State
+  const rawTab = searchParams.get('tab');
+  const activeTab = resolveSettingsTab(rawTab);
+  const [displayName, setDisplayName] = useState(profile?.display_name || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [sourceLoadState, setSourceLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [copiedCallback, setCopiedCallback] = useState(false);
-  const [showConfigHelper, setShowConfigHelper] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [isImportingHistory, setIsImportingHistory] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const disconnectConfirmRef = useRef<HTMLButtonElement>(null);
 
-  const callbackUrl = `${window.location.origin}/api/integrations/x/callback`;
+  useEffect(() => setDisplayName(profile?.display_name || ''), [profile?.display_name]);
 
-  // Listen for OAuth messages from popup
   useEffect(() => {
-    const handleResult = async (data: any) => {
-      if (!isConnecting) return;
-      if (data?.type === 'X_AUTH_SUCCESS') {
+    if (!rawTab || isCanonicalSettingsTab(rawTab)) return;
+    navigate(settingsTabUrl(resolveSettingsTab(rawTab)), { replace: true });
+  }, [navigate, rawTab]);
+
+  useEffect(() => setHistoryHasMore(Boolean(xStatus.hasPendingImport)), [xStatus.hasPendingImport]);
+
+  useEffect(() => {
+    if (!showDisconnectConfirm) return;
+    disconnectConfirmRef.current?.focus();
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setShowDisconnectConfirm(false); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [showDisconnectConfirm]);
+
+  useEffect(() => {
+    if (activeTab !== 'sources') return;
+    let cancelled = false;
+    setSourceLoadState('loading');
+    void refreshXStatus().then(ok => {
+      if (!cancelled) setSourceLoadState(ok ? 'ready' : 'error');
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, profile?.user_id, refreshXStatus]);
+
+  useEffect(() => {
+    const handleResult = async (data: unknown) => {
+      if (!isConnecting || !data || typeof data !== 'object') return;
+      const result = data as { type?: string; data?: { username?: string }; error?: string };
+      if (result.type === 'X_AUTH_SUCCESS') {
         setIsConnecting(false);
-        showToast(`Connected as @${data.data.username}`);
+        setConnectError(null);
         await refreshXStatus();
-      } else if (data?.type === 'X_AUTH_ERROR') {
+        showToast(result.data?.username ? `Connected as @${result.data.username}` : 'X account connected');
+      } else if (result.type === 'X_AUTH_ERROR') {
         setIsConnecting(false);
-        setConnectError(data.error || 'Authorization failed.');
-        showToast('X connection was rejected or cancelled.');
+        setConnectError(result.error || 'X authorization was cancelled or rejected.');
       }
     };
-    const handleOAuthMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent) => {
       if (event.origin === window.location.origin) void handleResult(event.data);
     };
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== 'kortex_x_oauth_result' || !event.newValue) return;
-      try { void handleResult(JSON.parse(event.newValue)); } catch { /* Ignore malformed data. */ }
+      try { void handleResult(JSON.parse(event.newValue)); } catch { /* Ignore malformed cross-window data. */ }
       localStorage.removeItem('kortex_x_oauth_result');
     };
-
-    window.addEventListener('message', handleOAuthMessage);
+    window.addEventListener('message', handleMessage);
     window.addEventListener('storage', handleStorage);
     return () => {
-      window.removeEventListener('message', handleOAuthMessage);
+      window.removeEventListener('message', handleMessage);
       window.removeEventListener('storage', handleStorage);
     };
-  }, [isConnecting, refreshXStatus, showToast, syncXBookmarks]);
+  }, [isConnecting, refreshXStatus, showToast]);
 
-  const handleConnectX = async () => {
+  const initials = useMemo(() => {
+    const value = profile?.display_name || profile?.email || 'R';
+    return value.trim().slice(0, 2).toUpperCase();
+  }, [profile?.display_name, profile?.email]);
+
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const normalized = displayName.trim().replace(/\s+/g, ' ');
+    if (!normalized || normalized.length > 80) {
+      setProfileMessage({ kind: 'error', text: 'Display name must be between 1 and 80 characters.' });
+      return;
+    }
+    setIsSavingProfile(true);
+    setProfileMessage(null);
+    try {
+      const updated = await api.updateProfile({ display_name: normalized });
+      await refreshSession();
+      setDisplayName(updated.display_name);
+      setProfileMessage({ kind: 'success', text: 'Profile saved.' });
+    } catch {
+      setProfileMessage({ kind: 'error', text: 'Your profile could not be saved. Please try again.' });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const connectX = async () => {
     setConnectError(null);
     setIsConnecting(true);
-
     try {
-      const authData = await api.getXAuthUrl(profile?.user_id);
-
-      if (authData.configured && authData.url) {
-        const width = 600;
-        const height = 700;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2.5;
-
-        const popup = window.open(
-          authData.url,
-          'x_oauth_popup',
-          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
-        );
-
-        if (!popup) {
-          setIsConnecting(false);
-          setConnectError('Popup blocked by browser. Please enable popups for this site.');
-        }
-      } else {
-        setIsConnecting(false);
-        setShowConfigHelper(true);
-      }
-    } catch (err: any) {
+      const auth = await api.getXAuthUrl();
+      if (!auth.configured || !auth.url) throw new Error('X connection is temporarily unavailable.');
+      const width = 600;
+      const height = 700;
+      const popup = window.open(auth.url, 'x_oauth_popup',
+        `width=${width},height=${height},left=${window.screenX + (window.outerWidth - width) / 2},top=${window.screenY + (window.outerHeight - height) / 2.5},status=no,resizable=yes`);
+      if (!popup) throw new Error('Your browser blocked the X authorization window. Allow popups and try again.');
+    } catch (error) {
       setIsConnecting(false);
-      setConnectError(err.message || 'Could not initiate connection.');
+      setConnectError(error instanceof Error ? error.message : 'Could not start the X connection.');
     }
   };
 
-  const handleConnectTestStream = async () => {
-    setIsConnecting(true);
-    setShowConfigHelper(false);
-    try {
-      const testRes = await api.testConnectX('faruk', profile?.display_name || 'Faruk');
-      if (testRes.success) {
-        await refreshXStatus();
-        showToast('Connected to test X stream');
-      }
-    } catch (e) {
-      showToast('Could not connect test stream');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
+  const disconnectX = async () => {
     setShowDisconnectConfirm(false);
-    await disconnectXAccount();
+    const disconnected = await disconnectXAccount();
+    if (!disconnected) setConnectError('X could not be disconnected. Your existing connection is unchanged.');
   };
 
-  const copyCallbackUrl = () => {
-    navigator.clipboard.writeText(callbackUrl);
-    setCopiedCallback(true);
-    setTimeout(() => setCopiedCallback(false), 2000);
-  };
-
-  const formatLastSync = (timestamp?: string) => {
-    if (!timestamp) return 'Never synchronized';
+  const runHistoricalImport = async () => {
+    setIsImportingHistory(true);
     try {
-      const date = new Date(timestamp);
-      const diffMinutes = Math.floor((Date.now() - date.getTime()) / (1000 * 60));
-      if (diffMinutes < 1) return 'Just now';
-      if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const result = await api.syncX({ historical: true, continueImport: historyHasMore });
+      setHistoryHasMore(Boolean(result.hasMore));
+      if (result.items.length) addImportedBookmarks(result.items);
+      showToast(result.historicalLimitReached
+        ? `Imported ${result.addedCount} bookmarks. X's current history window has been reached.`
+        : `Imported ${result.addedCount} new bookmark(s).`);
+      await refreshXStatus();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Historical import could not complete.');
+    } finally {
+      setIsImportingHistory(false);
+    }
+  };
+
+  const exportData = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      await api.exportData();
+      showToast('Recallly data export downloaded.');
     } catch {
-      return 'Recently';
+      setExportError('Your export could not be generated. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bookmarks, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `recallly-bookmarks-${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    showToast('Exported library as JSON.');
-  };
-
-  const handleExportMarkdown = () => {
-    const mdContent = bookmarks
-      .map(
-        (b) => `## ${b.author_name} (@${b.author_username})\n*Saved: ${b.bookmark_created_at}* | *URL: ${b.url}*\n\n${b.content}\n\n**AI Insight:** ${b.ai_summary || 'N/A'}\n\n---`
-      )
-      .join('\n\n');
-    const dataStr = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(mdContent);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `recallly-library-${new Date().toISOString().slice(0, 10)}.md`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    showToast('Exported library as Markdown.');
-  };
-
-  const handleReset = () => {
-    if (window.confirm('Reset all demo state back to default fixtures?')) {
-      resetData();
-      showToast('Demo state reset to initial fixtures.');
-    }
-  };
+  if (isAuthLoading) {
+    return <div className="flex min-h-48 items-center justify-center" role="status"><Loader2 className="h-5 w-5 animate-spin text-[#70706B]" /><span className="sr-only">Loading settings</span></div>;
+  }
+  if (!profile) return <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">{authError || 'Your account settings could not be loaded. Sign in again and retry.'}</div>;
 
   return (
-    <div id="settings-view" className="space-y-6 pb-24 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="pb-2 border-b border-[#E8E8E5]">
+    <div id="settings-view" className="mx-auto max-w-4xl space-y-6 pb-24">
+      <div className="border-b border-[#E8E8E5] pb-2">
         <h1 className="text-2xl font-bold tracking-tight text-[#171717]">Settings</h1>
-        <p className="text-xs sm:text-sm text-[#70706B] mt-0.5">
-          Manage your account, source connections, and intelligence preferences.
-        </p>
+        <p className="mt-0.5 text-xs text-[#70706B] sm:text-sm">Manage your account, X connection, billing, and local display preferences.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E8E8E5] pb-px overflow-x-auto scrollbar-none">
-        <button
-          id="tab-account"
-          onClick={() => setActiveTab('account')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'account'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          Account
-        </button>
-        <button
-          id="tab-billing"
-          onClick={() => setActiveTab('billing')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'billing'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          <span>Billing & Plans</span>
-          <span
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-              profile.plan === 'pro'
-                ? 'bg-[#EEF4FF] text-[#2563EB]'
-                : 'bg-[#F4F4F1] text-[#70706B]'
-            }`}
-          >
-            {profile.plan}
-          </span>
-        </button>
-        <button
-          id="tab-sources"
-          onClick={() => setActiveTab('sources')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'sources'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          Sources & Connections
-        </button>
-        <button
-          onClick={() => setActiveTab('intelligence')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'intelligence'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          Intelligence & Digests
-        </button>
-        <button
-          id="tab-automation"
-          onClick={() => setActiveTab('automation')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'automation'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          <span>Background & Reliability</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-        </button>
-        <button
-          onClick={() => setActiveTab('appearance')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'appearance'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          Appearance
-        </button>
-        <button
-          onClick={() => setActiveTab('data')}
-          className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'data'
-              ? 'border-[#171717] text-[#171717]'
-              : 'border-transparent text-[#70706B] hover:text-[#171717]'
-          }`}
-        >
-          Export & Data
-        </button>
+      <div role="tablist" aria-label="Settings sections" className="flex items-center gap-1 overflow-x-auto border-b border-[#E8E8E5] pb-px scrollbar-none">
+        {SETTINGS_TABS.map(tab => (
+          <button key={tab.id} id={`tab-${tab.id}`} type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
+            aria-controls={`settings-panel-${tab.id}`} onClick={() => navigate(settingsTabUrl(tab.id))}
+            onKeyDown={event => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const current = SETTINGS_TABS.findIndex(item => item.id === tab.id);
+              const target = event.key === 'Home' ? 0 : event.key === 'End' ? SETTINGS_TABS.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+              const next = SETTINGS_TABS[target];
+              navigate(settingsTabUrl(next.id));
+              requestAnimationFrame(() => document.getElementById(`tab-${next.id}`)?.focus());
+            }}
+            className={`min-h-10 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-semibold transition-colors ${activeTab === tab.id ? 'border-[#171717] text-[#171717]' : 'border-transparent text-[#70706B] hover:text-[#171717]'}`}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab 1: Account */}
       {activeTab === 'account' && (
-        <div className="space-y-6">
-          <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-5">
-            <h2 className="text-sm font-bold text-[#171717]">Profile Information</h2>
-
-            <div className="flex items-center gap-4">
-              <img
-                src={profile.avatar_url}
-                alt={profile.display_name}
-                className="w-16 h-16 rounded-full object-cover border border-[#E5E5E0]"
-              />
-              <div>
-                <h3 className="text-base font-bold text-[#171717]">{profile.display_name}</h3>
-                <p className="text-xs text-[#70706B]">{profile.email}</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#EEF4FF] text-[#2563EB]">
-                    {profile.plan} Plan
-                  </span>
-                  <span className="text-[11px] text-[#8A8A85]">Active subscriber</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#F0F0EC]">
-              <div>
-                <label className="block text-xs font-medium text-[#70706B] mb-1">Display Name</label>
-                <input
-                  type="text"
-                  value={profile.display_name}
-                  onChange={(e) => updateProfile({ display_name: e.target.value })}
-                  className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E0E0DC] rounded-xl text-[#171717]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#70706B] mb-1">Email Address</label>
-                <input
-                  type="email"
-                  disabled
-                  value={profile.email}
-                  className="w-full px-3 py-2 text-xs bg-[#F4F4F1] border border-[#E0E0DC] rounded-xl text-[#70706B] cursor-not-allowed"
-                />
-              </div>
-            </div>
+        <section id="settings-panel-account" role="tabpanel" aria-labelledby="tab-account" className="rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
+          <h2 className="text-sm font-bold text-[#171717]">Profile information</h2>
+          <div className="mt-5 flex min-w-0 items-center gap-4">
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-14 w-14 shrink-0 rounded-full border border-[#E5E5E0] object-cover" />
+              : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#171717] text-sm font-bold text-white" aria-hidden="true">{initials}</div>}
+            <div className="min-w-0"><p className="truncate text-base font-bold text-[#171717]">{profile.display_name}</p><p className="truncate text-xs text-[#70706B]">{profile.email}</p></div>
           </div>
-        </div>
-      )}
-
-      {/* Tab: Billing & Plans */}
-      {activeTab === 'billing' && <BillingSettingsSection />}
-
-      {/* Tab 2: Sources */}
-      {activeTab === 'sources' && (
-        <div className="space-y-6">
-          <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-[#171717]">Connected Sources</h2>
-                <p className="text-xs text-[#8A8A85]">
-                  Recallly extracts and organizes bookmarks from your external accounts via official read-only APIs.
-                </p>
-              </div>
-            </div>
-
-            {/* Error banner if any */}
-            {connectError && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-semibold">{connectError}</p>
-                  <p className="text-[11px] text-rose-700 mt-0.5">Please check popup permissions or try again.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Reauthorization Alert if token revoked/expired */}
-            {xStatus.connected && xStatus.reauthorization_required && (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-[#171717]">Re-authorization Required</span>
-                    <span className="text-[11px] text-amber-800">
-                      Your X connection token expired or was revoked. Please reconnect to resume automatic background syncing.
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={handleConnectX}
-                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shrink-0 cursor-pointer shadow-2xs transition-colors"
-                >
-                  Reconnect X Now
-                </button>
-              </div>
-            )}
-
-            {/* X / Twitter Source Card */}
-            <div className="p-5 rounded-2xl border border-[#E8E8E5] bg-[#FAFAF8] space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  {xStatus.connected && xStatus.avatarUrl ? (
-                    <img
-                      src={xStatus.avatarUrl}
-                      alt={xStatus.displayName || xStatus.username}
-                      className="w-10 h-10 rounded-xl object-cover border border-[#E8E8E5] shadow-2xs shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-xl bg-[#171717] text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0">
-                      𝕏
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-[#171717]">X / Twitter</span>
-                      {xStatus.connected ? (
-                        <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-md">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>Connected</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-[#8A8A85] bg-[#E8E8E5] px-2 py-0.5 rounded-md">
-                          Not connected
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-[#70706B] mt-0.5">
-                      {xStatus.connected ? (
-                        <>
-                          <span className="font-medium text-[#171717]">@{xStatus.username}</span> • Last synchronized {formatLastSync(xStatus.last_successful_sync || xStatus.last_sync_at)}
-                        </>
-                      ) : (
-                        'Connect X to import recent bookmarks and keep your library in sync.'
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                  {xStatus.connected ? (
-                    <>
-                      <button
-                        id="settings-sync-x-btn"
-                        onClick={async () => { await syncXBookmarks(); await refreshXStatus(); }}
-                        disabled={syncProgress.isSyncing}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-xs font-semibold text-[#FAFAF8] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${syncProgress.isSyncing ? 'animate-spin' : ''}`} />
-                        <span>{syncProgress.isSyncing ? 'Syncing...' : 'Sync now'}</span>
-                      </button>
-
-                      <button
-                        id="settings-disconnect-x-btn"
-                        onClick={() => setShowDisconnectConfirm(true)}
-                        className="px-3 py-1.5 rounded-xl bg-[#FFFFFF] border border-[#E8E8E5] hover:border-rose-300 hover:text-rose-600 text-xs font-medium text-[#70706B] transition-colors cursor-pointer"
-                        title="Disconnect X account"
-                      >
-                        Disconnect
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      id="settings-connect-x-btn"
-                      onClick={handleConnectX}
-                      disabled={isConnecting}
-                      className="px-4 py-2 rounded-xl bg-[#171717] hover:bg-[#2B2B2B] text-xs font-semibold text-[#FAFAF8] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                    >
-                      {isConnecting ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Connecting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Connect X</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && (
-                <div className="pt-3 border-t border-[#E8E8E5] flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-[#70706B]">X can import the latest bookmarks available through its official API. Older bookmarks may not be accessible.</span>
-                  <button type="button" disabled={isImportingHistory}
-                    onClick={async () => {
-                      setIsImportingHistory(true);
-                      try {
-                        const result = await api.syncX({ historical: true, continueImport: historyHasMore });
-                        setHistoryHasMore(Boolean(result.hasMore));
-                        if (result.items.length) addImportedBookmarks(result.items);
-                        showToast(result.historicalLimitReached
-                          ? `Imported ${result.addedCount} bookmarks. The current X API history window has been reached.`
-                          : `Imported ${result.addedCount} new bookmark(s).`);
-                        await refreshXStatus();
-                      } catch (error: any) { showToast(error.message || 'Import could not complete.'); }
-                      finally { setIsImportingHistory(false); }
-                    }} className="rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-50">
-                    {isImportingHistory ? 'Importing…' : historyHasMore ? 'Continue historical import' : 'Import available history'}
-                  </button>
-                </div>
-              )}
-
-              {xStatus.connected && (import.meta as any).env.VITE_DEMO_MODE === 'false' && xStatus.initialImport && (
-                <div className="pt-3 border-t border-[#E8E8E5] grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                  <div><span className="text-[#70706B]">Historical import</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.importedCount.toLocaleString()} imported</p></div>
-                  <div><span className="text-[#70706B]">Ongoing sync</span><p className="font-semibold text-[#171717]">{(xStatus.ongoingImportedCount || 0).toLocaleString()} synced since connecting</p></div>
-                  <div><span className="text-[#70706B]">Status</span><p className="font-semibold text-[#171717]">{xStatus.initialImport.limitReached ? 'Historical API window reached' : xStatus.initialImport.completedAt ? 'Historical import complete' : 'Import pending'}</p></div>
-                  {xStatus.initialImport.limitReached && <p className="sm:col-span-3 text-[#70706B]">X currently makes only its most recent bookmarks available through the official API. New bookmarks will continue syncing.</p>}
-                </div>
-              )}
-
-              {/* Cadence & Next Scheduled Sync Information */}
-              {xStatus.connected && (
-                <div className="pt-3 border-t border-[#E8E8E5] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#70706B] gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 font-medium text-[#171717]">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Cadence:</span>
-                    </span>
-                    <span className="font-semibold text-[#171717]">
-                      {(import.meta as any).env.VITE_DEMO_MODE === 'false'
-                        ? profile.plan === 'pro' ? 'Activity-aware Smart Sync' : 'Manual sync'
-                        : profile.plan === 'pro' ? 'Every 2 hours' : 'Every 24 hours'}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold bg-[#F4F4F1] text-[#70706B]">
-                      {profile.plan}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-[#70706B]">
-                    <Calendar className="w-3.5 h-3.5 text-[#8A8A85]" />
-                    <span>{(import.meta as any).env.VITE_DEMO_MODE === 'false' ? 'Provider availability:' : 'Next automatic sync:'}</span>
-                    <span className="font-medium text-[#171717]">
-                      {xStatus.next_sync_at
-                        ? new Date(xStatus.next_sync_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
-                        : (import.meta as any).env.VITE_DEMO_MODE === 'false' ? 'Available' : 'Scheduled in background'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Sync Progress Bar */}
-              {syncProgress.isSyncing && (
-                <div className="p-3.5 rounded-xl bg-white border border-[#E0E0DC] space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-[#171717] flex items-center gap-1.5">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                      <span>{syncProgress.message}</span>
-                    </span>
-                    <span className="text-[11px] text-[#8A8A85]">
-                      Stage: {syncProgress.stage}
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[#F0F0EC] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full bg-blue-600 transition-all duration-300 rounded-full ${
-                        syncProgress.stage === 'fetching' ? 'w-1/3' : syncProgress.stage === 'organizing' ? 'w-2/3' : 'w-full'
-                      }`}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Disconnect confirmation dialog inline */}
-              {showDisconnectConfirm && (
-                <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 text-xs text-rose-900 space-y-2.5">
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    <Unlink className="w-4 h-4 text-rose-600" />
-                    <span>Disconnect X account?</span>
-                  </div>
-                  <p className="text-[11px] text-rose-800 leading-relaxed">
-                    This will remove stored authorization tokens. Previously imported bookmarks will remain in your library.
-                  </p>
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      onClick={handleDisconnect}
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors cursor-pointer"
-                    >
-                      Yes, disconnect
-                    </button>
-                    <button
-                      onClick={() => setShowDisconnectConfirm(false)}
-                      className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-800 font-medium text-xs hover:bg-rose-100/50 transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Developer Setup & OAuth Information */}
-            <div className="p-5 rounded-2xl border border-[#E8E8E5] bg-[#FFFFFF] space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-[#70706B]" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#70706B]">
-                    OAuth 2.0 PKCE Configuration
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setShowConfigHelper((prev) => !prev)}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  {showConfigHelper ? 'Hide instructions' : 'View instructions'}
-                </button>
-              </div>
-
-              <p className="text-xs text-[#70706B] leading-relaxed">
-                Recallly integrates with X using official OAuth 2.0 with PKCE (RFC 7636). Tokens are stored encrypted server-side with AES-256-GCM. We strictly request read-only permissions: <code className="bg-[#F4F4F1] px-1 py-0.5 rounded text-[11px] font-mono text-[#171717]">tweet.read</code>, <code className="bg-[#F4F4F1] px-1 py-0.5 rounded text-[11px] font-mono text-[#171717]">users.read</code>, <code className="bg-[#F4F4F1] px-1 py-0.5 rounded text-[11px] font-mono text-[#171717]">bookmark.read</code>, <code className="bg-[#F4F4F1] px-1 py-0.5 rounded text-[11px] font-mono text-[#171717]">offline.access</code>.
-              </p>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[#8A8A85] uppercase tracking-wider">
-                  Redirect / Callback URI
-                </label>
-                <div className="flex items-center gap-2 p-2 bg-[#FAFAF8] border border-[#E8E8E5] rounded-xl">
-                  <code className="text-xs font-mono text-[#171717] flex-1 truncate">
-                    {callbackUrl}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={copyCallbackUrl}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-[#E0E0DC] hover:border-[#D0D0CB] text-xs font-medium text-[#171717] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs shrink-0"
-                  >
-                    {copiedCallback ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        <span className="text-emerald-700">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3 text-[#70706B]" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {showConfigHelper && (
-                <div className="p-4 rounded-xl bg-[#FAFAF8] border border-[#E8E8E5] space-y-3 text-xs">
-                  <h4 className="font-semibold text-[#171717]">Steps to set up your X Developer App:</h4>
-                  <ol className="list-decimal list-inside space-y-1.5 text-[#70706B] leading-relaxed">
-                    <li>Visit <a href="https://developer.x.com" target="_blank" rel="noreferrer" className="text-blue-600 underline">developer.x.com</a> and open your project app.</li>
-                    <li>Under User Authentication Settings, click <strong>Edit</strong>.</li>
-                    <li>Select <strong>OAuth 2.0</strong>, Type: <strong>Confidential client</strong> or <strong>Web App</strong>.</li>
-                    <li>Paste the Callback URI shown above into <strong>Redirect URL</strong>.</li>
-                    <li>Add <code className="bg-white px-1 py-0.5 rounded font-mono text-[10px]">X_CLIENT_ID</code> and <code className="bg-white px-1 py-0.5 rounded font-mono text-[10px]">X_CLIENT_SECRET</code> to your AI Studio environment settings.</li>
-                  </ol>
-
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleConnectTestStream}
-                      className="py-2 px-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 font-medium text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Switch to Sample Verified Test Stream</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Future Sources Roadmap */}
-          <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-4">
-            <h2 className="text-base font-bold text-[#171717]">Additional Sources</h2>
-            <p className="text-xs text-[#8A8A85]">
-              Modular source architecture designed to import knowledge from everywhere you learn.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { name: 'Reddit', desc: 'Saved posts, comments, and discussions' },
-                { name: 'LinkedIn', desc: 'Saved articles, frameworks, and career insights' },
-                { name: 'YouTube', desc: 'Watch later and video notes transcriptions' },
-                { name: 'Substack', desc: 'Newsletter highlights and saved essays' },
-                { name: 'Web & Articles', desc: 'Browser extension clipper for articles' },
-              ].map((src) => (
-                <div
-                  key={src.name}
-                  className="p-3.5 rounded-xl border border-[#E8E8E5] bg-[#FFFFFF] flex items-center justify-between"
-                >
-                  <div>
-                    <span className="text-xs font-semibold text-[#171717]">{src.name}</span>
-                    <p className="text-[11px] text-[#8A8A85]">{src.desc}</p>
-                  </div>
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-[#8A8A85] bg-[#F4F4F1] px-2 py-0.5 rounded border border-[#E0E0DC]">
-                    Coming soon
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Intelligence Preferences */}
-      {activeTab === 'intelligence' && (
-        <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-6">
-          <h2 className="text-base font-bold text-[#171717]">Synthesis & Intelligence</h2>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#F0F0EC]">
-              <div>
-                <span className="text-xs font-semibold text-[#171717] block">
-                  Digest Frequency
-                </span>
-                <span className="text-xs text-[#8A8A85]">
-                  How often AI synthesizes your saved bookmarks into a curated digest
-                </span>
-              </div>
-              <div className="flex items-center p-0.5 bg-[#F4F4F1] rounded-lg border border-[#E0E0DC]">
-                <button
-                  onClick={() => setDigestFreq('weekly')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium ${
-                    digestFreq === 'weekly' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                  }`}
-                >
-                  Weekly
-                </button>
-                <button
-                  onClick={() => setDigestFreq('monthly')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium ${
-                    digestFreq === 'monthly' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                  }`}
-                >
-                  Monthly
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pb-3 border-b border-[#F0F0EC]">
-              <div>
-                <span className="text-xs font-semibold text-[#171717] block">
-                  AI Summary Detail
-                </span>
-                <span className="text-xs text-[#8A8A85]">
-                  Depth of takeaway summaries generated on imported bookmarks
-                </span>
-              </div>
-              <div className="flex items-center p-0.5 bg-[#F4F4F1] rounded-lg border border-[#E0E0DC]">
-                <button
-                  onClick={() => setSummaryDetail('concise')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium ${
-                    summaryDetail === 'concise' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                  }`}
-                >
-                  Concise
-                </button>
-                <button
-                  onClick={() => setSummaryDetail('detailed')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium ${
-                    summaryDetail === 'detailed' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                  }`}
-                >
-                  Detailed
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-[#171717] block">
-                  Automatic Categorization
-                </span>
-                <span className="text-xs text-[#8A8A85]">
-                  Cluster new bookmarks into topic buckets automatically
-                </span>
-              </div>
-              <button
-                onClick={() => setAutoCategorize(!autoCategorize)}
-                className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  autoCategorize ? 'bg-[#171717]' : 'bg-[#D0D0CB]'
-                }`}
-              >
-                <span
-                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                    autoCategorize ? 'right-1' : 'left-1'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Section: Email Delivery & Schedule */}
-          <div className="pt-6 border-t border-[#F0F0EC] space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-[#171717] flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-blue-600" />
-                  <span>Scheduled Digest Email Delivery</span>
-                </h3>
-                <p className="text-xs text-[#8A8A85]">
-                  Receive an executive briefing with high-signal takeaways delivered to your inbox on schedule.
-                </p>
-              </div>
-
-              <button
-                onClick={() => updateDigestSettings({ enabled: !digestSettings.enabled })}
-                className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  digestSettings.enabled ? 'bg-[#171717]' : 'bg-[#D0D0CB]'
-                }`}
-              >
-                <span
-                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                    digestSettings.enabled ? 'right-1' : 'left-1'
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#FAFAF8] border border-[#E8E8E5]">
-              <div>
-                <label className="block text-xs font-medium text-[#70706B] mb-1">
-                  Recipient Email
-                </label>
-                <input
-                  type="email"
-                  value={digestSettings.email || profile.email}
-                  onChange={(e) => updateDigestSettings({ email: e.target.value })}
-                  placeholder="you@example.com"
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#E0E0DC] rounded-xl text-[#171717]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#70706B] mb-1">
-                  Delivery Day & Time
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={digestSettings.delivery_day || 'Sunday'}
-                    onChange={(e) => updateDigestSettings({ delivery_day: e.target.value })}
-                    className="px-2.5 py-2 text-xs bg-white border border-[#E0E0DC] rounded-xl text-[#171717]"
-                  >
-                    {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
-                      <option key={day} value={day}>{day}</option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={digestSettings.delivery_time || '09:00'}
-                    onChange={(e) => updateDigestSettings({ delivery_time: e.target.value })}
-                    className="px-2.5 py-2 text-xs bg-white border border-[#E0E0DC] rounded-xl text-[#171717]"
-                  >
-                    {['06:00', '07:00', '08:00', '09:00', '10:00', '12:00', '17:00', '18:00', '20:00'].map((time) => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-[#70706B] mb-1">
-                  Timezone (IANA Canonical)
-                </label>
-                <select
-                  value={digestSettings.timezone || 'UTC'}
-                  onChange={(e) => updateDigestSettings({ timezone: e.target.value })}
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#E0E0DC] rounded-xl text-[#171717]"
-                >
-                  {[
-                    'UTC',
-                    'America/New_York',
-                    'America/Chicago',
-                    'America/Denver',
-                    'America/Los_Angeles',
-                    'Europe/London',
-                    'Europe/Paris',
-                    'Europe/Berlin',
-                    'Asia/Tokyo',
-                    'Asia/Singapore',
-                    'Australia/Sydney',
-                  ].map((tz) => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-[#8A8A85] mt-1">
-                  Accurate IANA timezone evaluation ensures digests arrive in your morning inbox regardless of daylight saving shifts.
-                </p>
-              </div>
-            </div>
-
-            {/* Test Email Actions */}
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!digests || digests.length === 0) {
-                    showToast('Please generate at least one digest before sending test email.');
-                    return;
-                  }
-                  setIsSendingTestEmail(true);
-                  try {
-                    const res = await api.deliverDigestEmail(digests[0].id);
-                    showToast(`Digest email delivered via ${res.provider || 'Resend'} to ${res.recipientEmail}!`);
-                  } catch (e: any) {
-                    showToast(`Delivery failed: ${e.message}`);
-                  } finally {
-                    setIsSendingTestEmail(false);
-                  }
-                }}
-                disabled={isSendingTestEmail}
-                className="px-3 py-1.5 rounded-xl bg-white border border-[#E0E0DC] hover:border-[#D0D0CB] text-xs font-semibold text-[#171717] flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
-              >
-                {isSendingTestEmail ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5 text-blue-600" />
-                )}
-                <span>Send Test Digest Email</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!digests || digests.length === 0) {
-                    showToast('Generate a digest first to preview its email layout.');
-                    return;
-                  }
-                  try {
-                    const res = await fetch(`/api/digests/${digests[0].id}/email-preview`);
-                    if (res.ok) {
-                      const html = await res.text();
-                      setEmailPreviewHtml(html);
-                      setEmailPreviewOpen(true);
-                    } else {
-                      showToast('Could not load email template');
-                    }
-                  } catch (e) {
-                    showToast('Error previewing email');
-                  }
-                }}
-                className="px-3 py-1.5 rounded-xl bg-white border border-[#E0E0DC] hover:border-[#D0D0CB] text-xs font-semibold text-[#171717] flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-              >
-                <Eye className="w-3.5 h-3.5 text-[#70706B]" />
-                <span>Preview Email Template</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Background Automation & Reliability */}
-      {activeTab === 'automation' && <BackgroundReliabilitySection />}
-
-      {/* Email Preview Modal */}
-      {emailPreviewOpen && emailPreviewHtml && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden border border-[#E8E8E5]">
-            <div className="p-4 border-b border-[#E8E8E5] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold text-[#171717]">Digest Email Preview</h3>
-              </div>
-              <button
-                onClick={() => setEmailPreviewOpen(false)}
-                className="text-xs font-semibold text-[#70706B] hover:text-[#171717] px-2.5 py-1 rounded-lg hover:bg-[#F4F4F1]"
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto bg-gray-50 p-4">
-              <iframe
-                title="Email Preview"
-                srcDoc={emailPreviewHtml}
-                className="w-full h-[600px] border border-[#E0E0DC] rounded-xl bg-white shadow-xs"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: Appearance */}
-      {activeTab === 'appearance' && (
-        <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-5">
-          <h2 className="text-base font-bold text-[#171717]">Library Appearance</h2>
-
-          <div className="flex items-center justify-between pb-3 border-b border-[#F0F0EC]">
+          <form onSubmit={saveProfile} className="mt-5 grid grid-cols-1 gap-4 border-t border-[#F0F0EC] pt-5 sm:grid-cols-2">
             <div>
-              <span className="text-xs font-semibold text-[#171717] block">
-                Default Bookmark Layout
-              </span>
-              <span className="text-xs text-[#8A8A85]">
-                Switch between spacious comfortable rows or high-density rows
-              </span>
+              <label htmlFor="settings-display-name" className="mb-1 block text-xs font-medium text-[#70706B]">Display name</label>
+              <input id="settings-display-name" value={displayName} maxLength={80} autoComplete="name" onChange={event => setDisplayName(event.target.value)} className="w-full rounded-xl border border-[#E0E0DC] bg-[#FAFAF8] px-3 py-2 text-sm text-[#171717] focus:border-[#171717] focus:outline-none focus:ring-2 focus:ring-[#171717]/10" />
             </div>
-            <div className="flex items-center p-0.5 bg-[#F4F4F1] rounded-lg border border-[#E0E0DC]">
-              <button
-                onClick={() => setBookmarkViewMode('comfortable')}
-                className={`px-3 py-1 rounded-md text-xs font-medium ${
-                  bookmarkViewMode === 'comfortable' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                }`}
-              >
-                Comfortable
-              </button>
-              <button
-                onClick={() => setBookmarkViewMode('compact')}
-                className={`px-3 py-1 rounded-md text-xs font-medium ${
-                  bookmarkViewMode === 'compact' ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'
-                }`}
-              >
-                Compact
-              </button>
+            <div>
+              <label htmlFor="settings-email" className="mb-1 block text-xs font-medium text-[#70706B]">Email address</label>
+              <input id="settings-email" type="email" readOnly value={profile.email} aria-describedby="settings-email-help" className="w-full cursor-not-allowed rounded-xl border border-[#E0E0DC] bg-[#F4F4F1] px-3 py-2 text-sm text-[#70706B]" />
+              <p id="settings-email-help" className="mt-1 text-[11px] text-[#8A8A85]">Managed by your sign-in provider.</p>
             </div>
-          </div>
-        </div>
+            <div className="flex items-center gap-3 sm:col-span-2">
+              <button type="submit" disabled={isSavingProfile || displayName.trim() === profile.display_name} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSavingProfile && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Save profile</button>
+              {profileMessage && <p role="status" className={`text-xs ${profileMessage.kind === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>{profileMessage.text}</p>}
+            </div>
+          </form>
+        </section>
       )}
 
-      {/* Tab 5: Export & Data */}
-      {activeTab === 'data' && (
-        <div className="space-y-6">
-          <div className="p-6 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-4">
-            <h2 className="text-base font-bold text-[#171717]">Export Your Library</h2>
-            <p className="text-xs text-[#8A8A85]">
-              You own your saved knowledge. Download all bookmarks, topics, and AI summaries anytime.
-            </p>
+      {activeTab === 'billing' && <section id="settings-panel-billing" role="tabpanel" aria-labelledby="tab-billing"><BillingSettingsSection /></section>}
 
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={handleExportJSON}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D0D0CB] text-xs font-medium text-[#171717] transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-[#70706B]" />
-                <span>Export as JSON</span>
-              </button>
-
-              <button
-                onClick={handleExportMarkdown}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D0D0CB] text-xs font-medium text-[#171717] transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-[#70706B]" />
-                <span>Export as Markdown (.md)</span>
-              </button>
+      {activeTab === 'sources' && (
+        <section id="settings-panel-sources" role="tabpanel" aria-labelledby="tab-sources" className="space-y-5 rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
+          <div><h2 className="text-base font-bold text-[#171717]">Connected sources</h2><p className="mt-1 text-xs text-[#70706B]">Connect X through its official read-only API. Opening this page does not contact X.</p></div>
+          {sourceLoadState === 'loading' && <div role="status" className="flex items-center gap-2 rounded-xl border border-[#E8E8E5] bg-[#FAFAF8] p-4 text-xs text-[#70706B]"><Loader2 className="h-4 w-4 animate-spin" /> Loading connection state…</div>}
+          {(sourceLoadState === 'error' || connectError) && (
+            <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{connectError || 'Connection state could not be loaded. Retry without leaving this page.'}</span>{!connectError && <button type="button" className="ml-auto font-semibold underline" onClick={() => void refreshXStatus().then(ok => setSourceLoadState(ok ? 'ready' : 'error'))}>Retry</button>}</div>
+          )}
+          {sourceLoadState === 'ready' && (
+            <div className="space-y-4 rounded-2xl border border-[#E8E8E5] bg-[#FAFAF8] p-4 sm:p-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 items-center gap-3">
+                  {xStatus.connected && xStatus.avatarUrl ? <img src={xStatus.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl border border-[#E8E8E5] object-cover" /> : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#171717] font-bold text-white" aria-hidden="true">𝕏</div>}
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-[#171717]">X / Twitter</h3><span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${xStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-[#E8E8E5] text-[#70706B]'}`}>{xStatus.connected ? 'Connected' : 'Disconnected'}</span></div><p className="mt-0.5 truncate text-xs text-[#70706B]">{xStatus.connected ? `@${xStatus.username || 'account'} · Last successful sync: ${formatLastSync(xStatus.last_successful_sync || xStatus.last_sync_at)}` : 'Connect X to import the latest bookmarks available through its official API.'}</p></div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {xStatus.connected ? <><button id="settings-sync-x-btn" type="button" onClick={() => void syncXBookmarks()} disabled={syncProgress.isSyncing} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[#171717] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${syncProgress.isSyncing ? 'animate-spin' : ''}`} />{syncProgress.isSyncing ? 'Syncing…' : 'Sync now'}</button><button id="settings-disconnect-x-btn" type="button" onClick={() => setShowDisconnectConfirm(true)} className="min-h-10 rounded-xl border border-[#E0E0DC] bg-white px-3.5 py-2 text-xs font-medium text-[#70706B] hover:border-rose-300 hover:text-rose-700">Disconnect</button></>
+                    : <button id="settings-connect-x-btn" type="button" onClick={connectX} disabled={isConnecting} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{isConnecting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{isConnecting ? 'Connecting…' : 'Connect X'}</button>}
+                </div>
+              </div>
+              {xStatus.connected && xStatus.reauthorization_required && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Your X authorization expired or was revoked. Reconnect before your next manual sync.</span><button type="button" onClick={connectX} className="rounded-lg bg-amber-700 px-3 py-2 font-semibold text-white">Reconnect X</button></div>}
+              {xStatus.connected && xStatus.lastSyncError && !xStatus.reauthorization_required && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">The last sync did not complete. Your existing library is unchanged.</div>}
+              {xStatus.connected && <div className="grid grid-cols-1 gap-3 border-t border-[#E8E8E5] pt-4 text-xs sm:grid-cols-3"><div><span className="text-[#70706B]">Sync mode</span><p className="font-semibold text-[#171717]">Manual</p></div><div><span className="text-[#70706B]">Historical import</span><p className="font-semibold text-[#171717]">{xStatus.initialImport?.importedCount?.toLocaleString() || 0} imported</p></div><div><span className="text-[#70706B]">Ongoing sync</span><p className="font-semibold text-[#171717]">{(xStatus.ongoingImportedCount || 0).toLocaleString()} imported after connection</p></div></div>}
+              {xStatus.connected && <div className="flex flex-col gap-3 border-t border-[#E8E8E5] pt-4 text-xs text-[#70706B] sm:flex-row sm:items-center sm:justify-between"><p className="max-w-xl">Initial import is limited to bookmarks X currently makes available through its official API. Recallly cannot guarantee complete historical availability.</p><button type="button" disabled={isImportingHistory} onClick={runHistoricalImport} className="min-h-10 shrink-0 rounded-lg border border-[#D0D0CB] bg-white px-3 py-2 font-semibold text-[#171717] disabled:opacity-50">{isImportingHistory ? 'Importing…' : historyHasMore ? 'Continue available import' : 'Import available history'}</button></div>}
+              {syncProgress.isSyncing && <div role="status" className="flex items-center gap-2 rounded-xl border border-[#E0E0DC] bg-white p-3 text-xs text-[#171717]"><Loader2 className="h-4 w-4 animate-spin text-blue-600" /> {syncProgress.message}</div>}
+              {showDisconnectConfirm && <div role="alertdialog" aria-modal="true" aria-labelledby="disconnect-x-title" aria-describedby="disconnect-x-description" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-900"><h4 id="disconnect-x-title" className="flex items-center gap-2 font-semibold"><Unlink className="h-4 w-4" />Disconnect X account?</h4><p id="disconnect-x-description" className="mt-2">Stored authorization tokens will be removed. Imported bookmarks and their enrichment remain in Recallly.</p><div className="mt-3 flex gap-2"><button ref={disconnectConfirmRef} type="button" onClick={disconnectX} className="rounded-lg bg-rose-700 px-3 py-2 font-semibold text-white">Disconnect</button><button type="button" onClick={() => setShowDisconnectConfirm(false)} className="rounded-lg border border-rose-200 bg-white px-3 py-2 font-medium">Cancel</button></div></div>}
             </div>
-          </div>
+          )}
+        </section>
+      )}
 
-          <div className="p-6 bg-[#FFFFFF] border border-rose-200 rounded-2xl shadow-2xs space-y-4">
-            <h2 className="text-base font-bold text-rose-700">Demo State Reset</h2>
-            <p className="text-xs text-[#70706B]">
-              Restore all fixtures, bookmarks, and collections back to the initial demo baseline.
-            </p>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Demo State</span>
-            </button>
-          </div>
-        </div>
+      {activeTab === 'appearance' && (
+        <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" className="rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
+          <h2 className="text-base font-bold text-[#171717]">Library appearance</h2><p className="mt-1 text-xs text-[#70706B]">Choose the bookmark density used on this device.</p>
+          <fieldset className="mt-5 border-t border-[#F0F0EC] pt-5"><legend className="text-xs font-semibold text-[#171717]">Default bookmark layout</legend><div className="mt-3 inline-flex rounded-lg border border-[#E0E0DC] bg-[#F4F4F1] p-0.5">{(['comfortable', 'compact'] as const).map(mode => <button key={mode} type="button" aria-pressed={bookmarkViewMode === mode} onClick={() => setBookmarkViewMode(mode)} className={`min-h-10 rounded-md px-3 py-2 text-xs font-medium capitalize ${bookmarkViewMode === mode ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'}`}>{mode}</button>)}</div></fieldset>
+        </section>
+      )}
+
+      {activeTab === 'data' && (
+        <section id="settings-panel-data" role="tabpanel" aria-labelledby="tab-data" className="rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
+          <h2 className="text-base font-bold text-[#171717]">Export your Recallly data</h2><p className="mt-1 max-w-2xl text-xs text-[#70706B]">Download an authenticated JSON export containing your profile, saved items, completed AI enrichment, collections, and digests. The export does not contact X or Gemini.</p>
+          {exportError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{exportError}</p>}
+          <button type="button" onClick={exportData} disabled={isExporting} className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#D0D0CB] bg-white px-4 py-2 text-xs font-semibold text-[#171717] disabled:opacity-50">{isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}{isExporting ? 'Preparing export…' : 'Download JSON export'}</button>
+          <div className="mt-5 flex items-start gap-2 rounded-xl bg-[#FAFAF8] p-4 text-xs text-[#70706B]"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><p>Account deletion is not offered as an incomplete in-app action. Contact support for an account-level request; no data is deleted from this page.</p></div>
+        </section>
       )}
     </div>
   );

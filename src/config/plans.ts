@@ -104,9 +104,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     marketingHighlights: [
       'Connect X and import recent bookmarks',
       'Manual X bookmark sync',
-      '10 Ask Recallly AI questions / month',
-      '25 AI-enriched bookmarks with key takeaways',
-      'Fast lexical search & topic categorization',
+      'Read and organize bookmarks in Recallly',
+      'Search by saved content and metadata',
       '1 connected X account',
       'Full JSON data export anytime',
     ],
@@ -114,8 +113,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    tagline: 'Your X knowledge library, continuously organized',
-    description: 'Automatic X bookmark sync, semantic search, weekly digests, and advanced insights.',
+    tagline: 'Expanded Recallly access',
+    description: 'Review the currently available Pro terms and price in Stripe Checkout.',
     badge: 'Most Popular',
     prices: {
       monthly: {
@@ -148,14 +147,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       exportData: true,
     },
     marketingHighlights: [
-      'Import the latest bookmarks available from X',
-      'Automatic X bookmark sync',
-      '500 Ask Recallly conversational AI queries / month',
-      'Unlimited AI summaries & keyword tagging',
-      'Hybrid semantic vector search (RRF)',
-      'Automated weekly intelligence digests',
-      'Deep knowledge graph & emerging interest insights',
-      'Priority background processing pipeline',
+      'Everything currently available in Recallly Free',
+      'Review current Pro access in Stripe Checkout',
+      'Secure subscription management through Stripe',
     ],
   },
 };

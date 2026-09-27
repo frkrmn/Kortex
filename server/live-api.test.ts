@@ -33,6 +33,7 @@ test('live API requires a verified session and scopes bookmark lookup to its own
   const previousDemo = process.env.VITE_DEMO_MODE;
   const queries: string[] = [];
   const clearTokens: string[] = [];
+  const profileWrites: Array<Record<string, unknown>> = [];
   process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:39999';
   process.env.VITE_SUPABASE_ANON_KEY = 'test-anon-key';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
@@ -52,14 +53,16 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '') as FixtureUser;
       const id = url.searchParams.get('id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
-      if (id !== `${owner}-bookmark`) return Response.json(null);
-      return Response.json({
+      const row = {
         id, user_id: owner, source: 'x', external_id: id, content: `${owner} private data`,
         url: null, author_id: null, author_name: owner, author_username: owner,
         author_avatar_url: null, media: [], published_at: '2025-12-20T12:00:00Z', saved_at: '2026-01-01T00:00:00Z',
         imported_at: '2026-01-01T00:00:00Z', summary: null, is_read: false,
         is_favorite: false, metadata: {}, created_at: '2026-01-01T00:00:00Z',
-      });
+      };
+      if (!id) return Response.json([{ ...row, id: `${owner}-bookmark`, external_id: `${owner}-bookmark` }]);
+      if (id !== `${owner}-bookmark`) return Response.json(null);
+      return Response.json(row);
     }
     if (url.pathname === '/rest/v1/saved_item_enrichments') {
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
@@ -73,10 +76,26 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       const id = url.searchParams.get('id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
+      if (!id) return Response.json([{ id: `${owner}-collection`, user_id: owner, name: 'Owned', slug: 'owned', description: '', visibility: 'private', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }]);
       if (id !== `${owner}-collection`) return Response.json(null);
       return Response.json({ id, user_id: owner, name: 'Owned', slug: 'owned', description: '', visibility: 'private', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
     }
     if (url.pathname === '/rest/v1/collection_items') return Response.json([]);
+    if (url.pathname === '/rest/v1/profiles') {
+      const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
+      assert.equal(owner, token);
+      if ((init?.method || 'GET') === 'PATCH') profileWrites.push(JSON.parse(String(init?.body || '{}')));
+      return Response.json({ id: `${owner}-profile`, user_id: owner, display_name: 'Production Name', email: `${owner}@example.test`, avatar_url: '', timezone: 'UTC', created_at: '2026-01-01T00:00:00Z' });
+    }
+    if (url.pathname === '/rest/v1/subscriptions') {
+      const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
+      assert.equal(owner, token);
+      return Response.json({ user_id: owner, provider: 'stripe', plan: 'free', status: 'active', current_period_end: '1970-01-01T00:00:00Z' });
+    }
+    if (url.pathname === '/rest/v1/digests') {
+      assert.equal(url.searchParams.get('user_id'), `eq.${token}`);
+      return Response.json([]);
+    }
     if (url.pathname === '/rest/v1/connected_accounts_safe') {
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
@@ -126,8 +145,13 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     await liveApi(request('/collections/user-a-collection', 'user-a', 'PATCH', { name: 'Renamed' }), ownWrite.res);
     assert.equal(ownWrite.result.code, 200);
 
+    const unconfirmedClear = response();
+    await liveApi(request('/data/clear', 'user-b', 'POST'), unconfirmedClear.res);
+    assert.equal(unconfirmedClear.result.code, 400);
+    assert.deepEqual(clearTokens, []);
+
     const clear = response();
-    await liveApi(request('/data/clear', 'user-b', 'POST'), clear.res);
+    await liveApi(request('/data/clear', 'user-b', 'POST', { confirmation: 'DELETE MY LIBRARY' }), clear.res);
     assert.equal(clear.result.code, 200);
     assert.deepEqual(clearTokens, ['user-b']);
 
@@ -138,6 +162,29 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     const usage = response();
     await liveApi(request('/ai/usage', 'user-b'), usage.res);
     assert.equal((usage.result.body as { records: Array<{ user_id: string }> }).records[0].user_id, 'user-b');
+
+    const invalidProfile = response();
+    await liveApi(request('/user/profile', 'user-a', 'PATCH', { display_name: '   ', user_id: 'user-b' }), invalidProfile.res);
+    assert.equal(invalidProfile.result.code, 400);
+
+    const profile = response();
+    await liveApi(request('/user/profile', 'user-a', 'PATCH', { display_name: ' Production   Name ', user_id: 'user-b' }), profile.res);
+    assert.equal(profile.result.code, 200);
+    assert.deepEqual(profileWrites, [{ display_name: 'Production Name' }]);
+
+    const billing = response();
+    await liveApi(request('/billing/subscription', 'user-b'), billing.res);
+    assert.equal((billing.result.body as { user_id: string }).user_id, 'user-b');
+
+    const exported = response();
+    await liveApi(request('/data/export', 'user-a', 'POST'), exported.res);
+    assert.equal(exported.result.code, 200);
+    const exportBody = exported.result.body as { profile: { plan: string }; bookmarks: Array<{ user_id: string; ai_summary?: string }>; collections: Array<{ bookmark_ids: string[] }> };
+    assert.equal(exportBody.bookmarks.length, 1);
+    assert.equal(exportBody.bookmarks[0].user_id, 'user-a');
+    assert.equal(exportBody.bookmarks[0].ai_summary, 'Private owner summary');
+    assert.equal(exportBody.profile.plan, 'starter');
+    assert.deepEqual(exportBody.collections[0].bookmark_ids, []);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.VITE_SUPABASE_URL; else process.env.VITE_SUPABASE_URL = previousUrl;

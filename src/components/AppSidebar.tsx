@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
-import { DEFAULT_TRIAL_DAYS } from '../config/plans';
+import { useAuth } from '../lib/auth/auth-context';
 
 interface AppSidebarProps {
   onOpenSearch: () => void;
@@ -24,7 +24,8 @@ interface AppSidebarProps {
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
   const { route, navigate } = useRouter();
-  const { profile, sidebarCollapsed, setSidebarCollapsed } = useDemoStore();
+  const { sidebarCollapsed, setSidebarCollapsed } = useDemoStore();
+  const { profile } = useAuth();
 
   const navItems = [
     { id: 'dashboard', label: 'Home', path: '/dashboard', icon: <Home className="w-4 h-4" /> },
@@ -168,65 +169,28 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
           {!sidebarCollapsed && <ChevronRight className="w-3 h-3" />}
         </button>
 
-        {/* Upgrade Callout for Free Tier */}
-        {profile.plan !== 'pro' && !sidebarCollapsed && (
-          <button
-            id="sidebar-upgrade-cta"
-            onClick={() => navigate('/settings?tab=billing')}
-            className="w-full p-2.5 rounded-xl bg-gradient-to-br from-[#EEF4FF] to-[#E0E7FF] border border-[#C7D2FE] text-left hover:border-[#A5B4FC] transition-all cursor-pointer shadow-2xs"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#1E3A8A] flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-                Upgrade to Pro
-              </span>
-              <span className="text-[9px] font-bold text-[#1D4ED8] bg-white/80 px-1.5 py-0.5 rounded shadow-2xs">
-                {DEFAULT_TRIAL_DAYS}d Trial
-              </span>
-            </div>
-            <p className="text-[10px] text-[#3B82F6] mt-1 leading-tight">
-              Automatic X sync, semantic search & weekly digests.
-            </p>
-          </button>
-        )}
-
         {/* User Card */}
-        <div
-          onClick={() => navigate('/settings?tab=billing')}
+        <button type="button"
+          onClick={() => navigate('/settings?tab=account')}
           title="Account profile & billing"
-          className={`flex items-center rounded-lg p-1.5 hover:bg-[#F0F0EB] transition-colors cursor-pointer ${
+          className={`w-full flex items-center rounded-lg p-1.5 hover:bg-[#F0F0EB] transition-colors cursor-pointer ${
             sidebarCollapsed ? 'justify-center' : 'justify-between'
           }`}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <img
-              src={profile.avatar_url}
-              alt={profile.display_name}
-              className="w-7 h-7 rounded-full object-cover border border-[#E0E0DC] shrink-0"
-            />
+            {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-[#E0E0DC] shrink-0" /> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#171717] text-[10px] font-bold text-white" aria-hidden="true">{(profile?.display_name || profile?.email || 'R').slice(0, 2).toUpperCase()}</span>}
             {!sidebarCollapsed && (
               <div className="min-w-0 text-left">
                 <p className="text-xs font-medium text-[#171717] truncate leading-tight">
-                  {profile.display_name}
+                  {profile?.display_name || 'Recallly account'}
                 </p>
                 <p className="text-[10px] text-[#8A8A85] truncate leading-tight">
-                  {profile.email}
+                  {profile?.email || ''}
                 </p>
               </div>
             )}
           </div>
-          {!sidebarCollapsed && (
-            <span
-              className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wider uppercase ${
-                profile.plan === 'pro'
-                  ? 'bg-[#EEF4FF] text-[#2563EB]'
-                  : 'bg-[#F4F4F1] text-[#70706B]'
-              }`}
-            >
-              {profile.plan === 'pro' ? 'Pro' : 'Free'}
-            </span>
-          )}
-        </div>
+        </button>
       </div>
     </aside>
   );

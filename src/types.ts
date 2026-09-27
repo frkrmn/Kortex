@@ -285,6 +285,7 @@ export interface Subscription {
   trial_days_left?: number;
   price_monthly?: number;
   price_yearly?: number;
+  has_billing_account?: boolean;
 }
 
 export type UsageMetric = 'ask' | 'enrichment' | 'digest' | 'embedding' | 'sync';

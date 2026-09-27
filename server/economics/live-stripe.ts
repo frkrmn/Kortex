@@ -92,6 +92,9 @@ export class LiveStripeService {
           billing_interval: priceId === process.env.STRIPE_PRO_YEARLY_PRICE_ID ? 'yearly' : 'monthly',
           current_period_start: period ? new Date(period*1000).toISOString() : null,
           current_period_end: end ? new Date(end*1000).toISOString() : null,
+          trial_start: sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null,
+          trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+          has_used_trial: Boolean(sub.trial_start),
           cancel_at_period_end: sub.cancel_at_period_end }, { onConflict: 'user_id' });
         if (error) throw error;
         if (sub.status === 'active' || sub.status === 'trialing') await CreditService.ensureMonthlyAllowance(userId);

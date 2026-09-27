@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Bookmark,
   Collection,
@@ -45,6 +45,10 @@ export interface XStatusState {
   ongoingImportedCount?: number;
   lastSyncError?: string | null;
 }
+
+const disconnectedXStatus = (): XStatusState => ({
+  connected: false, username: '', displayName: '', avatarUrl: '', sync_status: 'idle', configured: false,
+});
 
 interface DemoStoreContextType {
   // State
@@ -98,9 +102,9 @@ interface DemoStoreContextType {
   ) => Promise<void>;
 
   // X Integration Actions
-  refreshXStatus: () => Promise<void>;
+  refreshXStatus: () => Promise<boolean>;
   syncXBookmarks: () => Promise<{ success: boolean; addedCount: number; discoveredCount?: number }>;
-  disconnectXAccount: () => Promise<void>;
+  disconnectXAccount: () => Promise<boolean>;
   addImportedBookmarks: (newItems: Bookmark[]) => void;
 
   // AI Enrichment Actions & State
@@ -235,16 +239,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [toastMessage]);
 
   // X Integration State
-  const [xStatus, setXStatus] = useState<XStatusState>({
-    connected: true,
-    username: 'faruk',
-    displayName: 'Faruk',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    last_sync_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    last_successful_sync: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    sync_status: 'idle',
-    configured: false,
-  });
+  const [xStatus, setXStatus] = useState<XStatusState>(disconnectedXStatus);
+  const xStatusRequest = useRef(0);
 
   const [syncProgress, setSyncProgress] = useState<SyncProgressState>({
     isSyncing: false,
@@ -256,11 +252,17 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Fetch initial X status from server
   const refreshXStatus = useCallback(async () => {
+    const request = ++xStatusRequest.current;
+    setXStatus(disconnectedXStatus());
     try {
       const status = await api.getXStatus();
+      if (request !== xStatusRequest.current) return false;
       setXStatus(status);
+      return true;
     } catch (e) {
+      if (request === xStatusRequest.current) setXStatus(disconnectedXStatus());
       console.warn('Could not fetch X status:', e);
+      return false;
     }
   }, []);
 
@@ -337,8 +339,10 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.disconnectX();
       await refreshXStatus();
       showToast('X account disconnected');
+      return true;
     } catch (e) {
       showToast('Could not disconnect X account');
+      return false;
     }
   }, [refreshXStatus, showToast]);
 

@@ -118,7 +118,7 @@ export const OnboardingView: React.FC = () => {
     setIsConnecting(true);
 
     try {
-      const authData = await api.getXAuthUrl(user?.id);
+      const authData = await api.getXAuthUrl();
 
       if (authData.configured && authData.url) {
         // Open official X OAuth PKCE popup

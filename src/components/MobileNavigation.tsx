@@ -14,7 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
-import { useDemoStore } from '../lib/store/demo-store';
+import { useAuth } from '../lib/auth/auth-context';
 
 interface MobileNavigationProps {
   onOpenSearch: () => void;
@@ -22,7 +22,7 @@ interface MobileNavigationProps {
 
 export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch }) => {
   const { route, navigate } = useRouter();
-  const { profile } = useDemoStore();
+  const { profile } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   return (
@@ -49,13 +49,10 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
           </button>
           <button
             onClick={() => navigate('/settings')}
+            aria-label="Open account settings"
             className="rounded-full overflow-hidden border border-[#E0E0DC]"
           >
-            <img
-              src={profile.avatar_url}
-              alt={profile.display_name}
-              className="w-7 h-7 object-cover"
-            />
+            {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-7 h-7 object-cover" /> : <span className="flex h-7 w-7 items-center justify-center bg-[#171717] text-[10px] font-bold text-white" aria-hidden="true">{(profile?.display_name || profile?.email || 'R').slice(0, 2).toUpperCase()}</span>}
           </button>
         </div>
       </header>

@@ -51,7 +51,7 @@ export const api = {
     return res.json();
   },
 
-  async getXAuthUrl(userId = 'user_default'): Promise<{
+  async getXAuthUrl(): Promise<{
     url: string | null;
     state: string;
     configured: boolean;
@@ -59,7 +59,7 @@ export const api = {
     instructions?: string;
   }> {
     const res = await apiFetch('/api/integrations/x/auth-url');
-    if (res.status === 401) throw new Error('Sign in to Kortex before connecting X.');
+    if (res.status === 401) throw new Error('Sign in to Recallly before connecting X.');
     if (!res.ok) {
       const details = await res.json().catch(() => null);
       throw new Error(details?.error || 'Could not start X connection. Please try again.');
@@ -677,7 +677,7 @@ export const api = {
     try {
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = 'kortex-data-export.json';
+      link.download = 'recallly-data-export.json';
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -686,8 +686,4 @@ export const api = {
     }
   },
 
-  async resetData(): Promise<void> {
-    const res = await apiFetch('/api/data/clear', { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to reset data');
-  },
 };

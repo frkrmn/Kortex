@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Request, Response } from 'express';
 import { decryptToken, encryptToken } from '../crypto';
 import { mapSavedItemRowToBookmark } from '../../src/lib/repositories/supabase/mappers';
+import { enqueueOwnedNewBookmarks } from '../ai/live-gemini-enrichment';
 import {
   normalizeXBookmarkPage,
   X_BOOKMARK_EXPANSIONS,
@@ -16,6 +17,14 @@ const COOKIE = 'kortex_x_oauth_bind';
 const CALLBACK_PATH = '/api/integrations/x/callback';
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 class XBookmarkPaymentRequiredError extends Error {}
+
+type XSyncDependencies = {
+  enqueueNewBookmarks: typeof enqueueOwnedNewBookmarks;
+};
+
+const defaultSyncDependencies: XSyncDependencies = {
+  enqueueNewBookmarks: enqueueOwnedNewBookmarks,
+};
 
 function config() {
   const appUrl = process.env.APP_URL;
@@ -165,7 +174,7 @@ export async function disconnectLiveX(userId: string) {
 }
 
 export async function syncLiveX(userId: string, options: { limit?: number; historical?: boolean; continueImport?: boolean;
-  automatic?: boolean; budgetPreflightBypassed?: boolean } = {}) {
+  automatic?: boolean; budgetPreflightBypassed?: boolean } = {}, dependencies: XSyncDependencies = defaultSyncDependencies) {
   const { CreditService } = await import('../economics/credit-service');
   const { ProviderBudgetService } = await import('../economics/provider-budget');
   const { importConfig } = await import('../economics/config');
@@ -377,6 +386,15 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         } : { ongoing_sync_import_count: Number(account.ongoing_sync_import_count || 0) + added }),
       }).eq('id', account.id),
     ]);
+    if (savedIds.length) {
+      try {
+        await dependencies.enqueueNewBookmarks(userId, savedIds);
+      } catch {
+        // Bookmark persistence is authoritative. The scheduled Gemini runner
+        // recovers missing idempotent queue rows on its next invocation.
+        console.warn(JSON.stringify({ event: 'gemini_enqueue_failed', userId, savedItemCount: savedIds.length }));
+      }
+    }
     return { success: true, addedCount: added, discoveredCount: discovered, historicalLimit: isInitialImport ? settings.bookmarkHistoryLimit : undefined,
       historicalLimitReached: reachedHistoricalLimit,
       initialImport: isInitialImport,

@@ -38,6 +38,7 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
   let savedAccount: Record<string, any> | null = null;
   let savedBookmark: Record<string, any> | null = null;
   let bookmarksStatus = 200;
+  let failedPersistenceId: string | null = null;
   let xRequests = 0;
   let paginateProvider = false;
   let providerTweets: any[] = [{ id: 'tweet-1', text: 'Private bookmark', note_tweet: { text: 'Full private bookmark' },
@@ -133,6 +134,9 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     }
     if (url.pathname === '/rest/v1/rpc/import_x_saved_item_unmetered') {
       const input = JSON.parse(String(init?.body));
+      if (input.p_external_id === failedPersistenceId) {
+        return Response.json({ message: 'fixture persistence failure', code: 'XX000' }, { status: 500 });
+      }
       if (knownIds.has(input.p_external_id)) return Response.json([{ imported: false, item_id: 'known' }]);
       knownIds.add(input.p_external_id);
       savedBookmark = { ...input.p_row, id: 'bookmark-a', user_id: 'user-a', source: 'twitter', external_id: input.p_external_id,
@@ -191,15 +195,44 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(savedBookmark?.metadata.x_referenced_posts[0].text, 'Thread root');
 
     providerTweets = Array.from({ length: 10 }, (_, i) => ({ id: `batch-${i}`, text: `Bookmark ${i}`, author_id: 'x-user-1' }));
-    for (let i = 0; i < 8; i++) knownIds.add(`batch-${i}`);
+    for (let i = 0; i < 9; i++) knownIds.add(`batch-${i}`);
+    const enqueued: string[][] = [];
+    const enqueueNewBookmarks = async (owner: string, ids: string[]) => {
+      assert.equal(owner, 'user-a');
+      enqueued.push(ids);
+      return ids.length;
+    };
     savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
-    const mixed = await syncLiveX('user-a');
-    assert.equal(mixed.addedCount, 2);
-    assert.deepEqual(usage.at(-1), { resources: 10, imported: 2 });
+    const mixed = await syncLiveX('user-a', {}, { enqueueNewBookmarks });
+    assert.equal(mixed.addedCount, 1);
+    assert.deepEqual(enqueued, [['bookmark-a']]);
+    assert.deepEqual(usage.at(-1), { resources: 10, imported: 1 });
     savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
-    const zeroYield = await syncLiveX('user-a');
+    const zeroYield = await syncLiveX('user-a', {}, { enqueueNewBookmarks });
     assert.equal(zeroYield.addedCount, 0);
+    assert.equal(enqueued.length, 1);
     assert.deepEqual(usage.at(-1), { resources: 10, imported: 0 });
+
+    // A queue failure cannot roll back or fail an already persisted bookmark.
+    providerTweets = [{ id: 'enqueue-failure', text: 'Still saved', author_id: 'x-user-1' }];
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    const enqueueFailure = await syncLiveX('user-a', {}, {
+      enqueueNewBookmarks: async () => { throw new Error('fixture queue unavailable'); },
+    });
+    assert.equal(enqueueFailure.success, true);
+    assert.equal(enqueueFailure.addedCount, 1);
+    assert.equal(savedBookmark?.external_id, 'enqueue-failure');
+
+    // A failed persistence result never reaches the enrichment queue.
+    providerTweets = [{ id: 'persistence-failure', text: 'Not saved', author_id: 'x-user-1' }];
+    failedPersistenceId = 'persistence-failure';
+    let persistenceFailureEnqueues = 0;
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    await assert.rejects(syncLiveX('user-a', {}, {
+      enqueueNewBookmarks: async () => { persistenceFailureEnqueues++; return 0; },
+    }), (error: unknown) => (error as { message?: string })?.message === 'fixture persistence failure');
+    assert.equal(persistenceFailureEnqueues, 0);
+    failedPersistenceId = null;
     providerTweets = Array.from({ length: 10_000 }, (_, i) => ({ id: `large-${i}`, text: `Large library ${i}`, author_id: 'x-user-1' }));
     savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const bounded = await syncLiveX('user-a', { limit: 10_000, historical: true });

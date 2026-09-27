@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { enqueueOwnedNewBookmarks } from './live-gemini-enrichment';
+import { enqueueOwnedNewBookmarks, runScheduledGeminiEnrichment } from './live-gemini-enrichment';
 
 test('new owned bookmark is queued once; other users cannot enqueue it', async () => {
   const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -44,6 +44,49 @@ test('new owned bookmark is queued once; other users cannot enqueue it', async (
     assert.equal(rows.size, 1);
   } finally {
     globalThis.fetch = previousFetch;
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+    }
+  }
+});
+
+test('scheduled runner fails closed before queue reconciliation or provider work', async () => {
+  const prior = process.env.GEMINI_ENRICHMENT_ENABLED;
+  process.env.GEMINI_ENRICHMENT_ENABLED = 'false';
+  try {
+    assert.deepEqual(await runScheduledGeminiEnrichment(), {
+      enabled: false, queued: 0, attempted: 0, completed: 0, failed: 0, retries: 0,
+      inputTokens: 0, outputTokens: 0, categories: {},
+    });
+  } finally {
+    if (prior === undefined) delete process.env.GEMINI_ENRICHMENT_ENABLED;
+    else process.env.GEMINI_ENRICHMENT_ENABLED = prior;
+  }
+});
+
+test('scheduled runner reconciles missing queue rows before bounded provider work when enabled', async () => {
+  const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, {
+    GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
+    GEMINI_ENRICHMENT_OWNER_USER_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    GEMINI_ENRICHMENT_ROLLOUT_CAP: '1000', GEMINI_API_KEY: 'unit-test',
+  });
+  const order: string[] = [];
+  try {
+    const result = await runScheduledGeminiEnrichment({
+      queue: async () => { order.push('queue'); return 1; },
+      run: async () => {
+        order.push('worker');
+        return { attempted: 1, completed: 1, failed: 0, retries: 0,
+          inputTokens: 10, outputTokens: 5, categories: { AI: 1 } };
+      },
+    });
+    assert.deepEqual(order, ['queue', 'worker']);
+    assert.deepEqual(result, { enabled: true, queued: 1, attempted: 1, completed: 1, failed: 0,
+      retries: 0, inputTokens: 10, outputTokens: 5, categories: { AI: 1 } });
+  } finally {
     for (const key of keys) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     }

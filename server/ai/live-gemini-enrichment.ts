@@ -178,6 +178,31 @@ export async function runControlledGeminiEnrichment(limit?: number): Promise<Enr
   return stats;
 }
 
+/**
+ * Scheduled owner-only runner. Reconciles any queue row missed after a
+ * successful bookmark write, then processes the normal bounded worker batch.
+ */
+type ScheduledEnrichmentDependencies = {
+  queue: typeof queueControlledBackfill;
+  run: typeof runControlledGeminiEnrichment;
+};
+
+const scheduledEnrichmentDependencies: ScheduledEnrichmentDependencies = {
+  queue: queueControlledBackfill,
+  run: runControlledGeminiEnrichment,
+};
+
+export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrichmentDependencies = scheduledEnrichmentDependencies) {
+  const controls = enrichmentControls();
+  if (!controls.enabled || !controls.ownerId || !controls.rolloutCap) {
+    return { enabled: false, queued: 0, attempted: 0, completed: 0, failed: 0, retries: 0,
+      inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
+  }
+  const queued = await dependencies.queue();
+  const result = await dependencies.run();
+  return { enabled: true, queued, ...result };
+}
+
 export async function controlledEnrichmentStats() {
   const controls = enrichmentControls();
   if (!controls.ownerId) throw new Error('Controlled owner is not configured.');

@@ -434,28 +434,6 @@ export const api = {
     return res.json();
   },
 
-  async getImportCredits(): Promise<{ availableCredits: number; includedCredits: number; monthlyCredits: number; purchasedCredits: number;
-    nextMonthlyAllowanceAt: string;
-    transactions: Array<{ type: string; balance_delta: number; created_at: string }> }> {
-    const res = await apiFetch('/api/billing/import-credits');
-    if (!res.ok) throw new Error('Unable to load Import Credits.');
-    return res.json();
-  },
-
-  async getImportPacks(): Promise<{ packs: Array<{ key: string; credits: number }>; proMonthlyImports: number }> {
-    const res = await apiFetch('/api/billing/config');
-    if (!res.ok) throw new Error('Unable to load Import Credit packs.');
-    const data = await res.json();
-    return { packs: data.importPacks || [], proMonthlyImports: data.proMonthlyImports || 0 };
-  },
-
-  async buyImportPack(pack: string): Promise<{ url: string }> {
-    const res = await apiFetch('/api/billing/checkout', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pack }) });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Checkout unavailable.');
-    return res.json();
-  },
-
   async createCheckoutSession(params: {
     plan?: string;
     interval?: 'monthly' | 'yearly';

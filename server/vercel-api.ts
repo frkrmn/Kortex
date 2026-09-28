@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { configureDeploymentTrustProxy } from './config/trust-proxy';
 import { liveApi } from './live-api';
 import { finishLiveXOAuth } from './sources/x-live';
 import { LiveStripeService } from './economics/live-stripe';
@@ -10,6 +11,7 @@ import { runScheduledGeminiEnrichment } from './ai/live-gemini-enrichment';
 import { ProviderBudgetService } from './economics/provider-budget';
 
 const app = express();
+configureDeploymentTrustProxy(app, '1');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.APP_URL, credentials: true }));
 app.use((req, res, next) => {

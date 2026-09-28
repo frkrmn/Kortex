@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, Unlink } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, LogOut, RefreshCw, Unlink } from 'lucide-react';
 import { BillingSettingsSection } from '../components/BillingSettingsSection';
 import { useAuth } from '../lib/auth/auth-context';
 import { api } from '../lib/api';
@@ -15,7 +15,7 @@ function formatLastSync(timestamp?: string) {
 }
 
 export const SettingsView: React.FC = () => {
-  const { profile, refreshSession, isLoading: isAuthLoading, authError } = useAuth();
+  const { profile, refreshSession, signOut, isLoading: isAuthLoading, authError } = useAuth();
   const { searchParams, navigate } = useRouter();
   const {
     bookmarkViewMode, setBookmarkViewMode, showToast, xStatus, syncProgress,
@@ -35,6 +35,7 @@ export const SettingsView: React.FC = () => {
   const [isImportingHistory, setIsImportingHistory] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const disconnectConfirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setDisplayName(profile?.display_name || ''), [profile?.display_name]);
@@ -98,6 +99,12 @@ export const SettingsView: React.FC = () => {
     const value = profile?.display_name || profile?.email || 'R';
     return value.trim().slice(0, 2).toUpperCase();
   }, [profile?.display_name, profile?.email]);
+
+  const logout = async () => {
+    setIsSigningOut(true);
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -227,6 +234,12 @@ export const SettingsView: React.FC = () => {
               {profileMessage && <p role="status" className={`text-xs ${profileMessage.kind === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>{profileMessage.text}</p>}
             </div>
           </form>
+          <div className="mt-6 flex flex-col gap-3 border-t border-[#F0F0EC] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div><h3 className="text-xs font-semibold text-[#171717]">Session</h3><p className="mt-1 text-[11px] text-[#70706B]">Sign out on this device without deleting your bookmarks or account.</p></div>
+            <button type="button" onClick={() => void logout()} disabled={isSigningOut} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#D0D0CB] bg-white px-4 py-2 text-xs font-semibold text-[#171717] disabled:opacity-50">
+              {isSigningOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}{isSigningOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
         </section>
       )}
 

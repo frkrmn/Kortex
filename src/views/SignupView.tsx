@@ -37,7 +37,7 @@ export const SignupView: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await signUp(email, password, name);
+      const res = await signUp(email, password, name, nextDestination);
       if (res.success) {
         if (res.requiresVerification) {
           setPendingVerificationEmail(email.trim());
@@ -59,7 +59,7 @@ export const SignupView: React.FC = () => {
     setFormError(null);
     setIsGoogleLoading(true);
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(nextDestination);
       if (!res.success) {
         setFormError(res.error || 'Google sign-up is not configured yet in this project.');
       }
@@ -75,7 +75,7 @@ export const SignupView: React.FC = () => {
     setIsResending(true);
     setResendStatus(null);
     try {
-      const res = await resendVerificationEmail(pendingVerificationEmail);
+      const res = await resendVerificationEmail(pendingVerificationEmail, nextDestination);
       if (res.success) {
         setResendStatus('Verification email resent! Please check your inbox.');
       } else {

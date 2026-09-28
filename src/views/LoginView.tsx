@@ -44,7 +44,7 @@ export const LoginView: React.FC = () => {
     setFormError(null);
     setIsGoogleLoading(true);
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(nextDestination);
       if (!res.success) {
         setFormError(res.error || 'Google sign-in is not configured yet in this project.');
       }

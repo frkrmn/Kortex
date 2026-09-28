@@ -77,15 +77,15 @@ const AuthenticatedApplication: React.FC = () => {
 
 const AuthenticatedRoutes: React.FC = () => {
   const { route, navigate } = useRouter();
-  const { isLoading, isAuthenticated, isDemo } = useAuth();
+  const { authState, isAuthenticated, isDemo, user } = useAuth();
   const authPage = ['login', 'signup', 'forgot-password', 'reset-password', 'auth-callback'].includes(route);
 
   useEffect(() => {
-    if (!authPage && !isLoading && !isAuthenticated && !isDemo) {
+    if (!authPage && authState === 'unauthenticated' && !isDemo) {
       const next = window.location.pathname + window.location.search;
       navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
     }
-  }, [authPage, isLoading, isAuthenticated, isDemo, navigate]);
+  }, [authPage, authState, isDemo, navigate]);
 
   if (route === 'login') return <LoginView />;
   if (route === 'signup') return <SignupView />;
@@ -93,14 +93,18 @@ const AuthenticatedRoutes: React.FC = () => {
   if (route === 'reset-password') return <ResetPasswordView />;
   if (route === 'auth-callback') return <AuthCallbackView />;
 
-  if (!isDemo && (isLoading || !isAuthenticated)) {
-    return <div className="min-h-screen bg-[#FAFAF8]" />;
+  if (!isDemo && (authState === 'initializing' || !isAuthenticated)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8] text-sm text-[#70706B]" role="status" aria-live="polite">
+        Checking your session…
+      </div>
+    );
   }
 
   if (route === 'onboarding') return <OnboardingView />;
 
   return (
-    <DemoStoreProvider>
+    <DemoStoreProvider key={user?.id || 'demo'}>
       <AuthenticatedApplication />
     </DemoStoreProvider>
   );

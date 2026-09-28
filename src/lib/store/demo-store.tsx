@@ -27,6 +27,8 @@ import {
 import { repositories, isDemoMode } from '../repositories';
 import { sortBookmarksNewestFirst } from '../bookmark-order';
 import { api } from '../api';
+import { useAuth } from '../auth/auth-context';
+import { clearLegacyPrivateCache } from '../auth/session-lifecycle';
 
 export interface XStatusState {
   connected: boolean;
@@ -149,6 +151,22 @@ const STORAGE_KEYS = {
 
 export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const demoMode = isDemoMode();
+  const { profile: authenticatedProfile } = useAuth();
+  const productionProfile: UserProfile = authenticatedProfile || {
+    id: '', user_id: '', display_name: '', email: '', avatar_url: '',
+    timezone: 'UTC', created_at: '', has_onboarded: false,
+  };
+  const productionDigestSettings: DigestSettings = {
+    user_id: productionProfile.user_id,
+    frequency: 'weekly', delivery_day: 'Sunday', delivery_time: '09:00',
+    timezone: productionProfile.timezone || 'UTC', email: productionProfile.email,
+    enabled: false,
+  };
+  const emptyInsights: RichInsightsData = {
+    total_bookmarks: 0, topics_distribution: [], emergingInterests: [],
+    ideaConnections: [], savingActivityTimeline: [], top_sources: [],
+    peak_saving_day: '', avg_bookmarks_per_week: 0, reading_completion_rate: 0,
+  };
 
   // Local persistence helpers
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
@@ -162,6 +180,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [digests, setDigests] = useState<Digest[]>(() => {
+    if (!demoMode) return [];
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.DIGESTS);
       return saved ? JSON.parse(saved) : demoDigests;
@@ -170,11 +189,12 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
-  const [insights, setInsights] = useState<RichInsightsData | InsightsData>(demoInsights);
+  const [insights, setInsights] = useState<RichInsightsData | InsightsData>(demoMode ? demoInsights : emptyInsights);
   const [rediscoveryCandidates, setRediscoveryCandidates] = useState<RediscoveryCandidateItem[]>([]);
   const [isGeneratingDigest, setIsGeneratingDigest] = useState<boolean>(false);
 
   const [collections, setCollections] = useState<Collection[]>(() => {
+    if (!demoMode) return [];
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.COLLECTIONS);
       return saved ? JSON.parse(saved) : demoCollections;
@@ -184,6 +204,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [profile, setProfile] = useState<UserProfile>(() => {
+    if (!demoMode) return productionProfile;
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
       return saved ? JSON.parse(saved) : demoUser;
@@ -193,6 +214,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [digestSettings, setDigestSettings] = useState<DigestSettings>(() => {
+    if (!demoMode) return productionDigestSettings;
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.DIGEST_SETTINGS);
       return saved ? JSON.parse(saved) : demoDigestSettings;
@@ -249,6 +271,22 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     totalCount: 0,
     message: 'Ready',
   });
+
+  // Legacy versions wrote production state to the demo cache namespace.
+  // Remove it and derive profile state only from the verified auth context.
+  useEffect(() => {
+    if (demoMode) return;
+    clearLegacyPrivateCache();
+    if (authenticatedProfile) {
+      setProfile(authenticatedProfile);
+      setDigestSettings(previous => ({
+        ...previous,
+        user_id: authenticatedProfile.user_id,
+        email: authenticatedProfile.email,
+        timezone: authenticatedProfile.timezone,
+      }));
+    }
+  }, [demoMode, authenticatedProfile]);
 
   // Fetch initial X status from server
   const refreshXStatus = useCallback(async () => {
@@ -406,7 +444,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     const topicMap = new Map<string, Topic>();
-    for (const dt of demoTopics) {
+    for (const dt of demoMode ? demoTopics : []) {
       topicMap.set(dt.name.toLowerCase(), {
         ...dt,
         count: counts[dt.name] || 0,
@@ -429,7 +467,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     return Array.from(topicMap.values()).sort((a, b) => b.count - a.count);
-  }, [bookmarks, profile.user_id]);
+  }, [bookmarks, profile.user_id, demoMode]);
 
   // Live polling for asynchronous AI enrichment jobs
   useEffect(() => {
@@ -492,36 +530,40 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [bookmarks, demoMode]);
 
   useEffect(() => {
+    if (!demoMode) return;
     try {
       localStorage.setItem(STORAGE_KEYS.COLLECTIONS, JSON.stringify(collections));
     } catch (e) {
       console.warn('Could not persist collections to localStorage', e);
     }
-  }, [collections]);
+  }, [collections, demoMode]);
 
   useEffect(() => {
+    if (!demoMode) return;
     try {
       localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
     } catch (e) {
       console.warn('Could not persist profile to localStorage', e);
     }
-  }, [profile]);
+  }, [profile, demoMode]);
 
   useEffect(() => {
+    if (!demoMode) return;
     try {
       localStorage.setItem(STORAGE_KEYS.DIGEST_SETTINGS, JSON.stringify(digestSettings));
     } catch (e) {
       console.warn('Could not persist digest settings to localStorage', e);
     }
-  }, [digestSettings]);
+  }, [digestSettings, demoMode]);
 
   useEffect(() => {
+    if (!demoMode) return;
     try {
       localStorage.setItem(STORAGE_KEYS.DIGESTS, JSON.stringify(digests));
     } catch (e) {
       console.warn('Could not persist digests to localStorage', e);
     }
-  }, [digests]);
+  }, [digests, demoMode]);
 
   const setSidebarCollapsed = useCallback((val: boolean) => {
     setSidebarCollapsedState(val);
@@ -538,7 +580,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   // Data mode indicator
-  const dataMode: 'demo' | 'supabase' = isDemoMode() ? 'demo' : 'supabase';
+  const dataMode: 'demo' | 'supabase' = demoMode ? 'demo' : 'supabase';
 
   // Mutations
   const toggleFavorite = useCallback((id: string) => {
@@ -769,6 +811,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [refreshDigests, refreshInsights, refreshRediscovery]);
 
   const resetData = useCallback(() => {
+    if (!demoMode) return;
     setBookmarks(demoBookmarks);
     setCollections(demoCollections);
     setProfile(demoUser);
@@ -781,7 +824,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.removeItem(STORAGE_KEYS.DIGEST_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.DIGESTS);
     showToast('Demo data reset to initial fixtures');
-  }, [showToast]);
+  }, [showToast, demoMode]);
 
   // Selectors
   const getBookmark = useCallback(
@@ -796,8 +839,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 
   const getDigest = useCallback(
-    (id: string) => digests.find((d) => d.id === id) || demoDigests.find((d) => d.id === id),
-    [digests]
+    (id: string) => digests.find((d) => d.id === id) || (demoMode ? demoDigests.find((d) => d.id === id) : undefined),
+    [digests, demoMode]
   );
 
   const getRelatedBookmarks = useCallback(
@@ -879,10 +922,12 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     () => ({
       dataMode,
       profile,
-      connectedAccounts: demoConnectedAccounts,
+      connectedAccounts: demoMode ? demoConnectedAccounts : [],
       xStatus,
       syncProgress,
-      subscription: demoSubscription,
+      subscription: demoMode ? demoSubscription : {
+        user_id: profile.user_id, provider: 'stripe', status: 'active', plan: 'free', current_period_end: '',
+      },
       digestSettings,
       topics,
       bookmarks,
@@ -931,6 +976,7 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }),
     [
       dataMode,
+      demoMode,
       profile,
       xStatus,
       syncProgress,

@@ -7,7 +7,7 @@ import { sanitizeRedirectPath } from '../lib/auth/redirect';
 
 export const AuthCallbackView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
-  const { refreshSession, profile } = useAuth();
+  const { refreshSession } = useAuth();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,26 +21,30 @@ export const AuthCallbackView: React.FC = () => {
       }
 
       try {
+        if (searchParams.get('error')) {
+          if (active) setErrorMsg('The sign-in request was cancelled or expired. Please try again.');
+          return;
+        }
         // Supabase client automatically processes URL hash fragments (#access_token=... or ?code=...)
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
-          if (active) setErrorMsg(error.message);
+          if (active) setErrorMsg('The sign-in link is invalid or expired. Please start again.');
           return;
         }
 
         if (data.session) {
-          await refreshSession();
+          const refreshedProfile = await refreshSession();
 
           // Determine destination
-          const next = sanitizeRedirectPath(searchParams.get('next'), null as any);
+          const next = sanitizeRedirectPath(searchParams.get('next'), '/dashboard');
 
-          if (profile && !profile.has_onboarded) {
+          if (!refreshedProfile) {
+            if (active) setErrorMsg('Your session could not be verified. Please sign in again.');
+          } else if (!refreshedProfile.has_onboarded) {
             if (active) navigate('/onboarding');
-          } else if (next) {
-            if (active) navigate(next);
           } else {
-            if (active) navigate('/dashboard');
+            if (active) navigate(next);
           }
         } else {
           // If no session found yet, wait briefly and try once more, or go to login
@@ -48,16 +52,19 @@ export const AuthCallbackView: React.FC = () => {
             if (!active) return;
             const { data: retryData } = await supabase.auth.getSession();
             if (retryData.session) {
-              await refreshSession();
-              navigate('/dashboard');
+              const refreshedProfile = await refreshSession();
+              if (!active) return;
+              if (!refreshedProfile) setErrorMsg('Your session could not be verified. Please sign in again.');
+              else if (!refreshedProfile.has_onboarded) navigate('/onboarding');
+              else navigate(sanitizeRedirectPath(searchParams.get('next'), '/dashboard'));
             } else {
-              navigate('/login');
+              setErrorMsg('The sign-in link is invalid or expired. Please start again.');
             }
           }, 800);
         }
-      } catch (err: any) {
+      } catch {
         if (active) {
-          setErrorMsg(err?.message || 'Authentication callback failed.');
+          setErrorMsg('Authentication could not be completed. Please try again.');
         }
       }
     };
@@ -67,7 +74,7 @@ export const AuthCallbackView: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [navigate, searchParams, refreshSession, profile]);
+  }, [navigate, searchParams, refreshSession]);
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#171717] flex flex-col justify-center items-center py-12 px-4">

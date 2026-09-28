@@ -3,6 +3,7 @@ import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { configureDeploymentTrustProxy } from './server/config/trust-proxy';
 import { createServer as createViteServer } from 'vite';
 import { store } from './server/store';
 import { xSyncEngine } from './server/sources/x-sync-engine';
@@ -25,6 +26,7 @@ function scriptJson(value: unknown): string {
 
 async function startServer() {
   const app = express();
+  configureDeploymentTrustProxy(app);
   const PORT = 3000;
   const APP_ORIGIN = process.env.APP_URL || `http://localhost:${PORT}`;
 

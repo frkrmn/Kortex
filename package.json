@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "test:economics": "node --import tsx --test server/live-api.test.ts server/sources/x-content.test.ts server/sources/x-live.test.ts server/sources/x-e2e-allowlist.test.ts server/economics/provider-budget.test.ts server/economics/demo-isolation.test.ts src/components/XBookmarkReader.test.tsx src/lib/bookmark-order.test.ts && node server/economics/migration-validation.test.mjs",
     "test:settings": "node --import tsx --test src/lib/settings.test.ts src/components/settings-production.test.ts server/live-api.test.ts",
-    "test:grm131": "node --import tsx --test src/grm131-public-demo.test.ts"
+    "test:grm131": "node --import tsx --test src/grm131-public-demo.test.ts",
+    "test:grm134": "node --import tsx --test src/lib/auth/redirect.test.ts src/lib/auth/session-lifecycle.test.ts src/auth-production.test.ts server/config/trust-proxy.test.ts server/live-api.test.ts src/grm131-public-demo.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

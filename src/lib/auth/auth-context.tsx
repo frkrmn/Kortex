@@ -1,14 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '../supabase/client';
 import { isDemoMode } from '../repositories';
 import { UserProfile } from '../../types';
 import { demoUser } from '../demo-data';
+import { clearLegacyPrivateCache, isCurrentAuthWork, resolveVerifiedSession, type AuthState } from './session-lifecycle';
+import { sanitizeRedirectPath } from './redirect';
 
 export interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
+  authState: AuthState;
   isLoading: boolean;
   isDemo: boolean;
   isAuthenticated: boolean;
@@ -20,16 +23,17 @@ export interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    displayName?: string
+    displayName?: string,
+    nextPath?: string
   ) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
-  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: (nextPath?: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  resendVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerificationEmail: (email: string, nextPath?: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<UserProfile | null>;
   completeOnboarding: (displayName: string, timezone: string) => Promise<boolean>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<UserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -57,7 +61,7 @@ function mapAuthErrorMessage(err: AuthError | Error | null | unknown): string {
     return 'Network connection error. Please check your connection and try again.';
   }
 
-  return message;
+  return 'Authentication could not be completed. Please try again.';
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -66,13 +70,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(() => {
     return isDemoMode() ? demoUser : null;
   });
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [authState, setAuthState] = useState<AuthState>('initializing');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const supabase = getSupabase();
   const demoActive = isDemoMode();
+  const authGeneration = useRef(0);
+  const currentUserId = useRef<string | null>(null);
 
   const clearAuthError = useCallback(() => setAuthError(null), []);
+
+  const clearAuthenticatedState = useCallback(() => {
+    authGeneration.current += 1;
+    currentUserId.current = null;
+    setUser(null);
+    setSession(null);
+    setProfile(demoActive ? demoUser : null);
+    if (!demoActive) clearLegacyPrivateCache();
+    setAuthState('unauthenticated');
+  }, [demoActive]);
 
   // Fetch or idempotently create profile for authenticated user
   const loadUserProfile = useCallback(async (authUser: User): Promise<UserProfile | null> => {
@@ -98,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           onboarding_completed_at: data.onboarding_completed_at || null,
           plan: 'pro',
         };
-        setProfile(loadedProfile);
         return loadedProfile;
       }
 
@@ -137,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           onboarding_completed_at: created.onboarding_completed_at || null,
           plan: 'pro',
         };
-        setProfile(newProfile);
         return newProfile;
       }
 
@@ -151,45 +165,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   }, [supabase]);
 
+  const beginAuthenticatedState = useCallback((verifiedSession: Session, verifiedUser: User) => {
+    const generation = authGeneration.current + 1;
+    authGeneration.current = generation;
+    currentUserId.current = verifiedUser.id;
+    clearLegacyPrivateCache();
+    setSession(verifiedSession);
+    setUser(verifiedUser);
+    setProfile(previous => previous?.user_id === verifiedUser.id ? previous : null);
+    setAuthState('authenticated');
+    return generation;
+  }, []);
+
+  const loadCurrentUserProfile = useCallback(async (authUser: User, generation: number) => {
+    const loaded = await loadUserProfile(authUser);
+    if (!isCurrentAuthWork(generation, authGeneration.current, authUser.id, currentUserId.current)) return null;
+    setProfile(loaded);
+    return loaded;
+  }, [loadUserProfile]);
+
   // Initialize session and listen for auth state changes
   useEffect(() => {
     let mounted = true;
 
     if (!supabase) {
-      // In demo mode or when Supabase is not configured
       if (demoActive) {
         setProfile(demoUser);
       }
-      setIsLoading(false);
+      setAuthState(demoActive ? 'authenticated' : 'unauthenticated');
       return;
     }
 
     const initAuth = async () => {
+      const startedAtGeneration = authGeneration.current;
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn('Supabase getSession notice:', error.message);
-        }
-
-        if (mounted) {
-          if (initialSession?.user) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-            await loadUserProfile(initialSession.user);
-          } else if (demoActive) {
-            setProfile(demoUser);
-          } else {
-            setUser(null);
-            setSession(null);
-            setProfile(null);
-          }
+        const verified = await resolveVerifiedSession(supabase.auth);
+        if (!mounted || authGeneration.current !== startedAtGeneration) return;
+        if (verified.session && verified.user) {
+          const generation = beginAuthenticatedState(verified.session, verified.user);
+          await loadCurrentUserProfile(verified.user, generation);
+        } else {
+          clearAuthenticatedState();
         }
       } catch (err) {
-        console.warn('Auth init failed:', err);
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        console.warn('Auth initialization could not verify the session.');
+        if (mounted) clearAuthenticatedState();
       }
     };
 
@@ -197,23 +217,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Subscribe to auth state updates
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
+      (event, currentSession) => {
         if (!mounted) return;
-
-        setSession(currentSession);
-        setUser(currentSession?.user || null);
-
-        if (currentSession?.user) {
-          await loadUserProfile(currentSession.user);
-        } else {
-          if (demoActive) {
-            setProfile(demoUser);
-          } else {
-            setProfile(null);
-          }
+        // The explicit server verification above owns initial restoration.
+        if (event === 'INITIAL_SESSION') return;
+        if (!currentSession?.user || event === 'SIGNED_OUT') {
+          clearAuthenticatedState();
+          return;
         }
 
-        setIsLoading(false);
+        const generation = beginAuthenticatedState(currentSession, currentSession.user);
+        // Avoid awaiting Supabase calls inside its auth callback lock.
+        window.setTimeout(() => {
+          if (mounted) void loadCurrentUserProfile(currentSession.user, generation);
+        }, 0);
       }
     );
 
@@ -221,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, demoActive, loadUserProfile]);
+  }, [supabase, demoActive, beginAuthenticatedState, loadCurrentUserProfile, clearAuthenticatedState]);
 
   // Sign In with Email & Password
   const signInWithPassword = useCallback(
@@ -248,9 +265,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (data.user) {
-          setUser(data.user);
-          setSession(data.session);
-          await loadUserProfile(data.user);
+          const generation = beginAuthenticatedState(data.session, data.user);
+          await loadCurrentUserProfile(data.user, generation);
         }
 
         return { success: true };
@@ -260,7 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: friendlyMsg };
       }
     },
-    [supabase, loadUserProfile]
+    [supabase, beginAuthenticatedState, loadCurrentUserProfile]
   );
 
   // Sign Up with Email & Password
@@ -268,7 +284,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     async (
       email: string,
       password: string,
-      displayName?: string
+      displayName?: string,
+      nextPath?: string
     ): Promise<{ success: boolean; requiresVerification?: boolean; error?: string }> => {
       setAuthError(null);
       if (!isSupabaseConfigured() || !supabase) {
@@ -288,7 +305,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               full_name: displayName?.trim() || '',
               name: displayName?.trim() || '',
             },
-            emailRedirectTo: `${siteUrl}/auth/callback`,
+            emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(sanitizeRedirectPath(nextPath, '/onboarding'))}`,
           },
         });
 
@@ -302,9 +319,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const requiresVerification = Boolean(data.user && !data.session);
 
         if (data.user && data.session) {
-          setUser(data.user);
-          setSession(data.session);
-          await loadUserProfile(data.user);
+          const generation = beginAuthenticatedState(data.session, data.user);
+          await loadCurrentUserProfile(data.user, generation);
         }
 
         return { success: true, requiresVerification };
@@ -314,11 +330,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: friendlyMsg };
       }
     },
-    [supabase, loadUserProfile]
+    [supabase, beginAuthenticatedState, loadCurrentUserProfile]
   );
 
   // Sign In with Google OAuth (graceful handling)
-  const signInWithGoogle = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const signInWithGoogle = useCallback(async (nextPath?: string): Promise<{ success: boolean; error?: string }> => {
     setAuthError(null);
     if (!isSupabaseConfigured() || !supabase) {
       return {
@@ -332,7 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${siteUrl}/auth/callback`,
+          redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(sanitizeRedirectPath(nextPath, '/dashboard'))}`,
         },
       });
 
@@ -354,19 +370,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = useCallback(async () => {
     if (supabase) {
       try {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut({ scope: 'global' });
+        if (error) await supabase.auth.signOut({ scope: 'local' });
       } catch (e) {
-        console.warn('Sign out notice:', e);
+        // Always clear the local session even when global revocation is offline.
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
       }
     }
-    setUser(null);
-    setSession(null);
-    if (demoActive) {
-      setProfile(demoUser);
-    } else {
-      setProfile(null);
-    }
-  }, [supabase, demoActive]);
+    clearAuthenticatedState();
+  }, [supabase, clearAuthenticatedState]);
 
   // Forgot password
   const resetPasswordForEmail = useCallback(
@@ -432,7 +444,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Resend verification email
   const resendVerificationEmail = useCallback(
-    async (email: string): Promise<{ success: boolean; error?: string }> => {
+    async (email: string, nextPath?: string): Promise<{ success: boolean; error?: string }> => {
       if (!supabase) return { success: false, error: 'Auth client unavailable' };
       try {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -440,7 +452,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           type: 'signup',
           email: email.trim(),
           options: {
-            emailRedirectTo: `${siteUrl}/auth/callback`,
+            emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(sanitizeRedirectPath(nextPath, '/onboarding'))}`,
           },
         });
 
@@ -579,26 +591,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [supabase, user, demoActive]
   );
 
-  const refreshSession = useCallback(async () => {
-    if (!supabase) return;
+  const refreshSession = useCallback(async (): Promise<UserProfile | null> => {
+    if (!supabase) return null;
+    const startedAtGeneration = authGeneration.current;
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        setUser(currentUser);
-        await loadUserProfile(currentUser);
+      const verified = await resolveVerifiedSession(supabase.auth);
+      if (authGeneration.current !== startedAtGeneration) return null;
+      if (!verified.user || !verified.session) {
+        clearAuthenticatedState();
+        return null;
       }
+      const generation = beginAuthenticatedState(verified.session, verified.user);
+      return await loadCurrentUserProfile(verified.user, generation);
     } catch (e) {
-      console.warn('Failed to refresh session:', e);
+      clearAuthenticatedState();
+      return null;
     }
-  }, [supabase, loadUserProfile]);
+  }, [supabase, beginAuthenticatedState, loadCurrentUserProfile, clearAuthenticatedState]);
 
-  const isAuthenticated = Boolean(user || (demoActive && profile));
+  const isLoading = authState === 'initializing';
+  const isAuthenticated = authState === 'authenticated' && Boolean(user || (demoActive && profile));
 
   const contextValue = useMemo(
     () => ({
       user,
       session,
       profile,
+      authState,
       isLoading,
       isDemo: demoActive,
       isAuthenticated,
@@ -619,6 +638,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user,
       session,
       profile,
+      authState,
       isLoading,
       demoActive,
       isAuthenticated,

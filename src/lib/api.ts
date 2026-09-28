@@ -23,7 +23,16 @@ async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promi
   const { data: { session } } = await supabase.auth.getSession();
   const headers = new Headers(init.headers);
   if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`);
-  return fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401 && session?.access_token) {
+    // A route-specific 401 is not enough to destroy local auth state. Verify
+    // the token with Supabase first, then emit SIGNED_OUT only when invalid.
+    const { data, error } = await supabase.auth.getUser(session.access_token);
+    if (error || !data.user) {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    }
+  }
+  return response;
 }
 
 export const api = {

@@ -35,7 +35,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     },
     {
       q: 'Will Recallly keep syncing new bookmarks?',
-      a: 'Yes. Pro includes automatic X bookmark sync. Free uses manual sync. Provider availability and rate limits can temporarily delay a sync.',
+      a: 'Recallly currently provides manual X bookmark sync. Automatic Pro sync is tracked separately and is not generally enabled yet.',
     },
     {
       q: 'Can my Recallly library grow beyond the initial import window?',
@@ -63,7 +63,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     },
     {
       q: 'What is included in the 7-day free trial?',
-      a: 'The trial includes Pro features such as automatic X bookmark sync, AI organization, semantic search, Ask Recallly, insights, and weekly digests. Current pricing and trial terms are shown in Stripe Checkout.',
+      a: 'Stripe Checkout shows the current trial eligibility, Pro access, price, and payment terms before you confirm.',
     },
   ];
 
@@ -396,7 +396,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex items-baseline justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-[#171717]">Recallly Pro</h3>
-                  <p className="text-xs text-[#70706B]">Your X knowledge library, continuously organized</p>
+                  <p className="text-xs text-[#70706B]">Review current Pro access in checkout</p>
                 </div>
                 <div className="text-right">
                   <span className="text-2xl font-bold text-[#171717]">{PLANS.pro.prices.monthly.formatted}</span>
@@ -411,19 +411,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Automatic X bookmark sync</span>
+                  <span>Manual X bookmark sync</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>AI-powered organization and semantic search</span>
+                  <span>AI summaries, categories, and topics</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Ask Recallly across your library</span>
+                  <span>Category and topic filtering</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Insights, rediscovery, and weekly digests</span>
+                  <span>Rich in-app bookmark Reader</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />

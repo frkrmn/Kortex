@@ -15,7 +15,7 @@ test('Settings contains only supported production surfaces and explicit async st
 });
 
 test('customer-facing Settings billing has no obsolete prices, credits, quotas, or unsupported auto-sync claim', () => {
-  const source = [read('./BillingSettingsSection.tsx'), read('./UpgradeModal.tsx'), read('./AppSidebar.tsx')].join('\n');
+  const source = [read('./BillingSettingsSection.tsx'), read('./UpgradeModal.tsx'), read('./AppSidebar.tsx'), read('../views/LandingPage.tsx')].join('\n');
   for (const removed of ['\\$12', '14-day', '14 day', 'Import Credits', 'Buy credits', 'credit pack', 'Automatic X Bookmark Sync', 'automatic X sync', 'AI usage', 'bookmark quota']) {
     assert.doesNotMatch(source, new RegExp(removed, 'i'));
   }

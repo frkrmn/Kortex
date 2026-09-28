@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isXAutoSyncEnabled } from './scheduled-sync';
+import { isXAutoSyncEnabled, isXAutoSyncRolloutEligible, xAutoSyncControls } from './scheduled-sync';
 import { SmartSyncService } from '../economics/smart-sync';
 import { enrichmentControls, runControlledGeminiEnrichment } from '../ai/live-gemini-enrichment';
 
@@ -16,10 +16,10 @@ test('cron authentication alone cannot enable scheduled X sync', async () => {
   globalThis.fetch = async () => { providerCalls++; throw new Error('Provider call was attempted'); };
   try {
     assert.equal(isXAutoSyncEnabled(), false);
-    assert.deepEqual(await SmartSyncService.run(), { synced: 0, skipped: 0 });
+    assert.equal((await SmartSyncService.run()).attempted, 0);
     process.env.X_AUTO_SYNC_ENABLED = 'false';
     assert.equal(isXAutoSyncEnabled(), false);
-    assert.deepEqual(await SmartSyncService.run(), { synced: 0, skipped: 0 });
+    assert.equal((await SmartSyncService.run()).attempted, 0);
     assert.equal(providerCalls, 0);
   } finally {
     globalThis.fetch = priorFetch;
@@ -33,6 +33,13 @@ test('cron authentication alone cannot enable scheduled X sync', async () => {
 test('scheduled X sync requires explicit opt-in and honors the legacy kill switch', () => {
   assert.equal(isXAutoSyncEnabled({ CRON_SECRET: 'test-only-secret', X_AUTO_SYNC_ENABLED: 'true' }), true);
   assert.equal(isXAutoSyncEnabled({ CRON_SECRET: 'test-only-secret', X_AUTO_SYNC_ENABLED: 'true', X_SYNC_ENABLED: 'false' }), false);
+  assert.equal(xAutoSyncControls({ X_AUTO_SYNC_ENABLED: 'true' }).enabled, false);
+  const controlled = { X_AUTO_SYNC_ENABLED: 'true', X_AUTO_SYNC_ROLLOUT_MODE: 'controlled',
+    X_AUTO_SYNC_CONTROLLED_OWNER_USER_ID: owner };
+  assert.equal(xAutoSyncControls(controlled).enabled, true);
+  assert.equal(isXAutoSyncRolloutEligible(owner, controlled), true);
+  assert.equal(isXAutoSyncRolloutEligible('223e4567-e89b-42d3-a456-426614174000', controlled), false);
+  assert.equal(xAutoSyncControls({ ...controlled, X_AUTO_SYNC_CONTROLLED_OWNER_USER_ID: 'owner@example.com' }).enabled, false);
 });
 
 test('Gemini scheduling is independent of X auto-sync and fails closed', async () => {

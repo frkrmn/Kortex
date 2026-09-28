@@ -38,6 +38,9 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
   let savedAccount: Record<string, any> | null = null;
   let savedBookmark: Record<string, any> | null = null;
   let bookmarksStatus = 200;
+  let refreshStatus = 200;
+  let refreshRequests = 0;
+  let currentAccessToken = 'private-access-token';
   let failedPersistenceId: string | null = null;
   let xRequests = 0;
   let paginateProvider = false;
@@ -74,6 +77,12 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     }
     if (url.hostname === 'api.x.com' && url.pathname === '/2/oauth2/token') {
       const params = new URLSearchParams(String(init?.body));
+      if (params.get('grant_type') === 'refresh_token') {
+        refreshRequests++;
+        if (refreshStatus !== 200) return Response.json({ error: refreshStatus === 400 ? 'invalid_grant' : 'temporary' }, { status: refreshStatus });
+        currentAccessToken = 'refreshed-access-token';
+        return Response.json({ access_token: 'refreshed-access-token', refresh_token: 'rotated-refresh-token', expires_in: 3600 });
+      }
       assert.equal(params.get('code_verifier'), decryptToken(stateRowForVerifier!.code_verifier_encrypted));
       return Response.json({ access_token: 'private-access-token', refresh_token: 'private-refresh-token', expires_in: 3600 });
     }
@@ -90,7 +99,15 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     }
     if (url.pathname === '/rest/v1/connected_accounts' && (init?.method === 'PATCH' || init?.method === 'DELETE')) {
       assert.equal(url.searchParams.get('id') === 'eq.account-a' || url.searchParams.get('user_id') === 'eq.user-a', true);
-      if (init?.method === 'PATCH' && savedAccount) Object.assign(savedAccount, JSON.parse(String(init.body)));
+      if (init?.method === 'PATCH' && savedAccount) {
+        const body = JSON.parse(String(init.body));
+        const returnRepresentation = new Headers(init?.headers).get('prefer')?.includes('return=representation');
+        const lockFilter = url.searchParams.get('or');
+        const cutoff = lockFilter?.match(/last_sync_at\.lt\.([^,)]+)/)?.[1];
+        if (returnRepresentation && cutoff && savedAccount.last_sync_at &&
+            new Date(savedAccount.last_sync_at).getTime() >= new Date(cutoff).getTime()) return Response.json(null);
+        Object.assign(savedAccount, body);
+      }
       if (new Headers(init?.headers).get('prefer')?.includes('return=representation')) return Response.json({ id: 'account-a' });
       return new Response(null, { status: 204 });
     }
@@ -98,13 +115,13 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     if (url.pathname === '/rest/v1/sync_jobs' && init?.method === 'PATCH') return new Response(null, { status: 204 });
     if (url.pathname === '/2/users/x-user-1/bookmarks') {
       xRequests++;
-      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer private-access-token');
+      assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${currentAccessToken}`);
       assert.match(url.searchParams.get('tweet.fields') || '', /conversation_id/);
       assert.match(url.searchParams.get('tweet.fields') || '', /referenced_tweets/);
       assert.match(url.searchParams.get('expansions') || '', /attachments.media_keys/);
       assert.match(url.searchParams.get('expansions') || '', /referenced_tweets.id/);
       assert.match(url.searchParams.get('media.fields') || '', /preview_image_url/);
-      if (bookmarksStatus === 402) return Response.json({ title: 'Payment Required' }, { status: 402 });
+      if (bookmarksStatus !== 200) return Response.json({ title: 'Provider error' }, { status: bookmarksStatus });
       const pageSize = Number(url.searchParams.get('max_results') || 100);
       const offset = Number(url.searchParams.get('pagination_token') || 0);
       const pageTweets = providerTweets.slice(offset, offset + pageSize);
@@ -194,6 +211,14 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(savedBookmark?.metadata.x_thread_fully_available, false);
     assert.equal(savedBookmark?.metadata.x_referenced_posts[0].text, 'Thread root');
 
+    // The shared lock protects both manual and automatic callers. A second
+    // invocation during the five-minute lease cannot reach X.
+    const requestsBeforeOverlap = xRequests;
+    const overlap = await syncLiveX('user-a', { automatic: true });
+    assert.equal(overlap.success, false);
+    assert.equal(overlap.statusCode, 429);
+    assert.equal(xRequests, requestsBeforeOverlap);
+
     providerTweets = Array.from({ length: 10 }, (_, i) => ({ id: `batch-${i}`, text: `Bookmark ${i}`, author_id: 'x-user-1' }));
     for (let i = 0; i < 9; i++) knownIds.add(`batch-${i}`);
     const enqueued: string[][] = [];
@@ -212,6 +237,60 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(zeroYield.addedCount, 0);
     assert.equal(enqueued.length, 1);
     assert.deepEqual(usage.at(-1), { resources: 10, imported: 0 });
+
+    // A mixed duplicate/new first page is not proof that older provider pages
+    // are known. Automatic sync remains bounded but does not miss page two.
+    providerTweets = Array.from({ length: 20 }, (_, i) => ({ id: `batch-${i}`, text: `Bookmark ${i}`, author_id: 'x-user-1' }));
+    paginateProvider = true;
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    const requestsBeforeIncremental = xRequests;
+    const incremental = await syncLiveX('user-a', { automatic: true, limit: 30, maxPages: 3 }, { enqueueNewBookmarks });
+    assert.equal(incremental.success, true);
+    assert.equal(incremental.requestCount, 2);
+    assert.equal(incremental.addedCount, 10);
+    assert.equal(xRequests, requestsBeforeIncremental + 2);
+    paginateProvider = false;
+
+    // Scheduler due_at must not disable user-initiated manual sync. A provider
+    // 429 backoff remains authoritative for both paths.
+    providerTweets = [{ id: 'manual-during-schedule', text: 'Manual remains available', author_id: 'x-user-1' }];
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    savedAccount!.next_sync_at = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+    savedAccount!.last_error_code = null;
+    const beforeManualSchedule = xRequests;
+    const manualDuringSchedule = await syncLiveX('user-a');
+    assert.equal(manualDuringSchedule.success, true);
+    assert.equal(xRequests, beforeManualSchedule + 1);
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    savedAccount!.next_sync_at = new Date(Date.now() + 15 * 60_000).toISOString();
+    savedAccount!.last_error_code = 'x_http_429';
+    const beforeProviderBackoff = xRequests;
+    const providerBackoff = await syncLiveX('user-a');
+    assert.equal(providerBackoff.statusCode, 429);
+    assert.equal(xRequests, beforeProviderBackoff);
+    savedAccount!.next_sync_at = null;
+    savedAccount!.last_error_code = null;
+
+    // Token refresh is inside the shared lease. Concurrent callers exchange a
+    // rotating refresh token once, and transient refresh errors do not revoke.
+    savedAccount!.token_expires_at = new Date(Date.now() - 1000).toISOString();
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    providerTweets = [{ id: 'refresh-race', text: 'Refresh once', author_id: 'x-user-1' }];
+    const refreshBefore = refreshRequests;
+    const [refreshFirst, refreshSecond] = await Promise.all([
+      syncLiveX('user-a'), syncLiveX('user-a'),
+    ]);
+    assert.equal([refreshFirst.success, refreshSecond.success].filter(Boolean).length, 1);
+    assert.equal(refreshRequests, refreshBefore + 1);
+    refreshStatus = 500;
+    savedAccount!.token_expires_at = new Date(Date.now() - 1000).toISOString();
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    const transientRefresh = await syncLiveX('user-a');
+    assert.equal(transientRefresh.statusCode, 503);
+    assert.equal(savedAccount!.reauthorization_required, false);
+    refreshStatus = 200;
+    savedAccount!.token_expires_at = new Date(Date.now() + 3600_000).toISOString();
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
 
     // A queue failure cannot roll back or fail an already persisted bookmark.
     providerTweets = [{ id: 'enqueue-failure', text: 'Still saved', author_id: 'x-user-1' }];
@@ -288,6 +367,17 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     assert.equal(paymentRequired.success, false);
     assert.equal(paymentRequired.statusCode, 402);
     assert.match(paymentRequired.error, /temporarily unavailable/);
+
+    bookmarksStatus = 401;
+    savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
+    const unauthorized = await syncLiveX('user-a', { budgetPreflightBypassed: true });
+    assert.equal(unauthorized.success, false);
+    assert.equal(unauthorized.statusCode, 401);
+    assert.equal(savedAccount!.reauthorization_required, true);
+    const requestsAfterUnauthorized = xRequests;
+    const blockedKnownInvalid = await syncLiveX('user-a', { budgetPreflightBypassed: true });
+    assert.equal(blockedKnownInvalid.statusCode, 409);
+    assert.equal(xRequests, requestsAfterUnauthorized);
 
     const disconnected = await disconnectLiveX('user-a');
     assert.equal(disconnected.success, true);

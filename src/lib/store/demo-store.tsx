@@ -38,6 +38,8 @@ export interface XStatusState {
   last_sync_at?: string;
   last_successful_sync?: string;
   sync_status: 'idle' | 'syncing' | 'error';
+  automaticSyncActive?: boolean;
+  automaticSyncRollout?: 'off' | 'controlled' | 'production';
   configured: boolean;
   redirectUri?: string;
   reauthorization_required?: boolean;

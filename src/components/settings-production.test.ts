@@ -9,6 +9,7 @@ test('Settings contains only supported production surfaces and explicit async st
   for (const required of ['Loading connection state', 'Connection state could not be loaded', 'Managed by your sign-in provider', 'Manual', 'Download JSON export']) {
     assert.match(source, new RegExp(required));
   }
+  assert.match(source, /automaticSyncActive \? 'Automatic sync active' : 'Manual'/);
   for (const removed of ['Developer OAuth Setup', 'Sample verified test stream', 'Demo State Reset', 'Intelligence & Digests', 'Background & Reliability']) {
     assert.doesNotMatch(source, new RegExp(removed));
   }

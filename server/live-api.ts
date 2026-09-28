@@ -14,6 +14,8 @@ import { sortBookmarksNewestFirst } from '../src/lib/bookmark-order';
 import { enqueueOwnedNewBookmarks } from './ai/live-gemini-enrichment';
 import { attachLiveEnrichments } from './ai/live-enrichment-view';
 import { GEMINI_ENRICHMENT_MODEL, GEMINI_PROMPT_VERSION, GEMINI_SCHEMA_VERSION } from './ai/gemini-v1';
+import { hasActiveProEntitlement } from './billing/live-entitlement';
+import { isXAutoSyncRolloutEligible, xAutoSyncControls } from './config/scheduled-sync';
 
 /** Production routes use the caller's JWT and Postgres RLS, never the demo file. */
 export async function liveApi(req: Request, res: Response): Promise<void> {
@@ -132,6 +134,12 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         .select('sync_cursor,initial_import_started_at,initial_import_completed_at,initial_import_count,initial_import_limit,historical_limit_reached,ongoing_sync_import_count,last_error_message,reauthorization_required')
         .eq('user_id', user.id).eq('provider', 'twitter').maybeSingle();
       if (importStateError) throw importStateError;
+      const { data: subscription, error: subscriptionError } = await db.from('subscriptions')
+        .select('plan,status,current_period_end,trial_end,cancel_at_period_end').eq('user_id', user.id).maybeSingle();
+      if (subscriptionError) throw subscriptionError;
+      const automaticSyncActive = Boolean(account?.connected) && !importState?.reauthorization_required &&
+        hasActiveProEntitlement(subscription) && isXAutoSyncRolloutEligible(user.id);
+      const autoControls = xAutoSyncControls();
       res.json({
         connected: Boolean(account?.connected), username: account?.username || '',
         displayName: account?.displayName || '', avatarUrl: account?.avatarUrl || '',
@@ -149,6 +157,8 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         lastSyncError: importState?.last_error_message || null,
         reauthorizationRequired: Boolean(importState?.reauthorization_required),
         reauthorization_required: Boolean(importState?.reauthorization_required),
+        automaticSyncActive,
+        automaticSyncRollout: automaticSyncActive ? autoControls.mode : 'off',
         redirectUri: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, '')}/api/integrations/x/callback` : null,
       });
       return;

@@ -17,6 +17,21 @@ const COOKIE = 'kortex_x_oauth_bind';
 const CALLBACK_PATH = '/api/integrations/x/callback';
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 class XBookmarkPaymentRequiredError extends Error {}
+class XBookmarkProviderError extends Error {
+  constructor(readonly status: number) {
+    super(`X bookmarks request failed (${status}).`);
+    this.name = 'XBookmarkProviderError';
+  }
+}
+
+type XSyncOptions = {
+  limit?: number;
+  historical?: boolean;
+  continueImport?: boolean;
+  automatic?: boolean;
+  budgetPreflightBypassed?: boolean;
+  maxPages?: number;
+};
 
 type XSyncDependencies = {
   enqueueNewBookmarks: typeof enqueueOwnedNewBookmarks;
@@ -156,6 +171,10 @@ export async function finishLiveXOAuth(req: Request, res: Response) {
       refresh_token_encrypted: typeof tokens.refresh_token === 'string' ? encryptToken(tokens.refresh_token) : null,
       token_expires_at: tokenExpiry(tokens.expires_in),
       sync_status: 'idle',
+      reauthorization_required: false,
+      last_error_code: null,
+      last_error_message: null,
+      next_sync_at: null,
       metadata: { account_label: profile.name || profile.username, avatar_url: profile.profile_image_url || '' },
     }, { onConflict: 'user_id,provider' });
     if (saveError) throw saveError;
@@ -173,8 +192,7 @@ export async function disconnectLiveX(userId: string) {
   return { success: true };
 }
 
-export async function syncLiveX(userId: string, options: { limit?: number; historical?: boolean; continueImport?: boolean;
-  automatic?: boolean; budgetPreflightBypassed?: boolean } = {}, dependencies: XSyncDependencies = defaultSyncDependencies) {
+export async function syncLiveX(userId: string, options: XSyncOptions = {}, dependencies: XSyncDependencies = defaultSyncDependencies) {
   const { CreditService } = await import('../economics/credit-service');
   const { ProviderBudgetService } = await import('../economics/provider-budget');
   const { importConfig } = await import('../economics/config');
@@ -186,7 +204,13 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
   if (!account || !account.access_token_encrypted || !account.provider_user_id) {
     return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'X account is not connected.' };
   }
-  if (account.next_sync_at && new Date(account.next_sync_at).getTime() > Date.now()) {
+  if (account.reauthorization_required) {
+    return { success: false, addedCount: 0, discoveredCount: 0, requestCount: 0, queuedCount: 0,
+      items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
+  }
+  const providerBackoffActive = account.last_error_code === 'x_http_429';
+  if (account.next_sync_at && new Date(account.next_sync_at).getTime() > Date.now() &&
+      (options.automatic || providerBackoffActive)) {
     return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429,
       error: 'X sync is temporarily limited. Please try again later.' };
   }
@@ -212,17 +236,52 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       providerRequestAttempted: false, providerStatus: null, resourcesRead: 0 }));
   }
   await recordImportEvent(userId, 'import_started', { requested, historical: isInitialImport, automatic: Boolean(options.automatic) });
+
+  // Acquire the shared manual/automatic lease before token refresh. Refresh
+  // tokens may rotate, so two callers must never exchange the same token.
+  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+  const { data: lock, error: lockError } = await db.from('connected_accounts')
+    .update({ sync_status: 'syncing', last_sync_at: new Date().toISOString() })
+    .eq('id', account.id).eq('user_id', userId)
+    .or(`last_sync_at.is.null,last_sync_at.lt.${cutoff}`).select('id').maybeSingle();
+  if (lockError) throw lockError;
+  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, requestCount: 0, queuedCount: 0,
+    items: [], statusCode: 429, error: 'Please wait a few minutes before syncing again.' };
+
   let accessToken = decryptToken(account.access_token_encrypted);
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() < Date.now() + 120000) {
-    if (!account.refresh_token_encrypted) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
+    if (!account.refresh_token_encrypted) {
+      await db.from('connected_accounts').update({ sync_status: 'error', reauthorization_required: true,
+        last_error_code: 'x_reauthorization_required', last_error_message: 'Reconnect X to continue syncing.' }).eq('id', account.id);
+      return { success: false, addedCount: 0, discoveredCount: 0, requestCount: 0, queuedCount: 0,
+        items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
+    }
     const settings = config()!;
     const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: decryptToken(account.refresh_token_encrypted), client_id: settings.clientId });
     const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
     if (process.env.X_CLIENT_SECRET) headers.Authorization = `Basic ${Buffer.from(`${settings.clientId}:${process.env.X_CLIENT_SECRET}`).toString('base64')}`;
-    const response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers, body: body.toString() });
+    let response: globalThis.Response;
+    try {
+      response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers, body: body.toString() });
+    } catch (error) {
+      await db.from('connected_accounts').update({ sync_status: 'error', last_error_code: 'x_refresh_failed',
+        last_error_message: 'The last X sync did not complete.' }).eq('id', account.id);
+      throw error;
+    }
     if (!response.ok) {
-      await db.from('connected_accounts').update({ sync_status: 'error' }).eq('id', account.id);
-      return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 409, error: 'Reconnect X to continue syncing.' };
+      const terminalAuthorization = response.status === 400 || response.status === 401 || response.status === 403;
+      const retryAt = response.status === 429 ? new Date(Date.now() + 15 * 60_000).toISOString() : null;
+      await db.from('connected_accounts').update({ sync_status: 'error',
+        ...(terminalAuthorization ? { reauthorization_required: true, last_error_code: 'x_reauthorization_required',
+          last_error_message: 'Reconnect X to continue syncing.' } : {
+          last_error_code: response.status === 429 ? 'x_http_429' : 'x_refresh_failed',
+          last_error_message: 'The last X sync did not complete.', ...(retryAt ? { next_sync_at: retryAt } : {}),
+        }),
+      }).eq('id', account.id);
+      return { success: false, addedCount: 0, discoveredCount: 0, requestCount: 0, queuedCount: 0,
+        items: [], statusCode: terminalAuthorization ? 409 : response.status === 429 ? 429 : 503,
+        error: terminalAuthorization ? 'Reconnect X to continue syncing.'
+          : 'X sync is temporarily unavailable. Your existing Recallly library is still available.' };
     }
     const tokens = await response.json();
     if (typeof tokens.access_token !== 'string') throw new Error('X refresh did not return an access token.');
@@ -235,29 +294,24 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     if (updateError) throw updateError;
   }
 
-  // Compare-and-set on a server-written timestamp limits provider calls even
-  // when two app instances receive sync requests at the same time.
-  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
-  const { data: lock, error: lockError } = await db.from('connected_accounts')
-    .update({ sync_status: 'syncing', last_sync_at: new Date().toISOString() })
-    .eq('id', account.id).eq('user_id', userId)
-    .or(`last_sync_at.is.null,last_sync_at.lt.${cutoff}`).select('id').maybeSingle();
-  if (lockError) throw lockError;
-  if (!lock) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 429, error: 'Please wait a few minutes before syncing again.' };
-
   const { data: job, error: jobError } = await db.from('sync_jobs').insert({ user_id: userId, provider: 'twitter',
     connected_account_id: account.id, status: 'running', started_at: new Date().toISOString() }).select().single();
   if (jobError) {
     await db.from('connected_accounts').update({ sync_status: 'error' }).eq('id', account.id);
     throw jobError;
   }
+  let requestCount = 0;
+  let queuedCount = 0;
   try {
     let nextToken: string | undefined = isInitialImport && options.continueImport && account.sync_cursor !== '__first__'
       ? account.sync_cursor || undefined : undefined;
     let discovered = 0;
     let added = 0;
     const savedIds: string[] = [];
-    const maxPages = isInitialImport ? Math.ceil(settings.bookmarkHistoryLimit / settings.initialPageSize) : settings.maxPages;
+    const requestedPageLimit = Number.isSafeInteger(options.maxPages) && Number(options.maxPages) > 0
+      ? Math.min(3, Number(options.maxPages)) : settings.maxPages;
+    const maxPages = isInitialImport ? Math.ceil(settings.bookmarkHistoryLimit / settings.initialPageSize)
+      : Math.min(settings.maxPages, requestedPageLimit);
     for (let page = 0; page < maxPages && discovered < maxItems; page++) {
       const pageSize = Math.max(1, Math.min(100, maxItems - discovered, isInitialImport ? settings.initialPageSize : settings.incrementalPageSize));
       if (page > 0 && !budgetPreflightBypassed) {
@@ -278,6 +332,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
       let response: globalThis.Response;
       if (budgetPreflightBypassed) console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId,
         budgetPreflightBypassed: true, providerRequestAttempted: true, providerStatus: null, resourcesRead: 0 }));
+      requestCount++;
       try { response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15_000) }); }
       catch (error) {
         if (budgetPreflightBypassed) {
@@ -305,7 +360,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
           await db.from('connected_accounts').update({ next_sync_at: retryAt.toISOString() }).eq('id', account.id);
         }
         if (response.status === 402) throw new XBookmarkPaymentRequiredError('X sync is temporarily unavailable. Your existing Recallly library is still available.');
-        throw new Error(`X bookmarks request failed (${response.status}).`);
+        throw new XBookmarkProviderError(response.status);
       }
       let payload: XApiBookmarkPage;
       try { payload = await response.json(); }
@@ -376,6 +431,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         cursor: isInitialImport ? pendingCursor : null, completed_at: now }).eq('id', job.id),
       db.from('connected_accounts').update({ sync_status: 'idle', last_sync_at: now, last_successful_sync_at: now,
         next_sync_at: null,
+        reauthorization_required: false, last_error_code: null, last_error_message: null,
         ...(isInitialImport ? {
           sync_cursor: pendingCursor,
           initial_import_started_at: account.initial_import_started_at || now,
@@ -389,6 +445,7 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
     if (savedIds.length) {
       try {
         const queued = await dependencies.enqueueNewBookmarks(userId, savedIds);
+        queuedCount = queued;
         console.info(JSON.stringify({ event: 'gemini_enqueue_after_x_sync', userId,
           newSavedItems: savedIds.length, immediateEnqueued: queued }));
       } catch {
@@ -397,18 +454,32 @@ export async function syncLiveX(userId: string, options: { limit?: number; histo
         console.warn(JSON.stringify({ event: 'gemini_enqueue_failed', userId, savedItemCount: savedIds.length }));
       }
     }
-    return { success: true, addedCount: added, discoveredCount: discovered, historicalLimit: isInitialImport ? settings.bookmarkHistoryLimit : undefined,
+    return { success: true, addedCount: added, discoveredCount: discovered, requestCount, queuedCount,
+      historicalLimit: isInitialImport ? settings.bookmarkHistoryLimit : undefined,
       historicalLimitReached: reachedHistoricalLimit,
       initialImport: isInitialImport,
       hasMore: Boolean(pendingCursor),
       items: (saved || []).map(row => mapSavedItemRowToBookmark(row)) };
   } catch (syncError) {
     const paymentRequired = syncError instanceof XBookmarkPaymentRequiredError;
+    const providerStatus = syncError instanceof XBookmarkProviderError ? syncError.status : null;
+    const reauthorizationRequired = providerStatus === 401 || providerStatus === 403;
+    const safeStatus = paymentRequired ? 402 : providerStatus === 429 ? 429 : reauthorizationRequired ? providerStatus! : providerStatus && providerStatus >= 500 ? 503 : null;
     await Promise.all([
-      db.from('sync_jobs').update({ status: 'failed', error_message: paymentRequired ? 'X API returned HTTP 402 Payment Required.' : 'X sync failed.', completed_at: new Date().toISOString() }).eq('id', job.id),
-      db.from('connected_accounts').update({ sync_status: 'error' }).eq('id', account.id),
+      db.from('sync_jobs').update({ status: 'failed',
+        error_message: paymentRequired ? 'X API returned HTTP 402 Payment Required.' : reauthorizationRequired ? 'X reauthorization required.' : 'X sync failed.',
+        completed_at: new Date().toISOString() }).eq('id', job.id),
+      db.from('connected_accounts').update({ sync_status: 'error',
+        ...(reauthorizationRequired ? { reauthorization_required: true, last_error_code: 'x_reauthorization_required',
+          last_error_message: 'Reconnect X to continue syncing.' } : {
+          last_error_code: paymentRequired ? 'x_payment_required' : providerStatus ? `x_http_${providerStatus}` : 'x_sync_failed',
+          last_error_message: 'The last X sync did not complete.',
+        }),
+      }).eq('id', account.id),
     ]);
-    if (paymentRequired) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 402, error: (syncError as Error).message };
+    if (safeStatus) return { success: false, addedCount: 0, discoveredCount: 0, requestCount, queuedCount: 0,
+      items: [], statusCode: safeStatus, error: paymentRequired ? (syncError as Error).message
+        : reauthorizationRequired ? 'Reconnect X to continue syncing.' : 'X sync is temporarily unavailable. Your existing Recallly library is still available.' };
     throw syncError;
   }
 }

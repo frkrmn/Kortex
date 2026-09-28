@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Home,
   Bookmark as BookmarkIcon,
@@ -24,6 +24,15 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
   const { route, navigate } = useRouter();
   const { profile } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const closeMoreRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isMoreOpen) return;
+    closeMoreRef.current?.focus();
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsMoreOpen(false); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [isMoreOpen]);
 
   return (
     <>
@@ -131,17 +140,22 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
 
       {/* Mobile More Sheet */}
       {isMoreOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex flex-col justify-end animate-in fade-in duration-150">
+        <div className="md:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex flex-col justify-end animate-in fade-in duration-150" onMouseDown={event => { if (event.target === event.currentTarget) setIsMoreOpen(false); }}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-more-title"
             className="bg-[#FAFAF8] rounded-t-2xl border-t border-[#E8E8E5] p-5 space-y-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-[#E8E8E5]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#8A8A85]">
+              <span id="mobile-more-title" className="text-xs font-semibold uppercase tracking-wider text-[#8A8A85]">
                 More Navigation
               </span>
               <button
+                ref={closeMoreRef}
                 onClick={() => setIsMoreOpen(false)}
+                aria-label="Close navigation menu"
                 className="p-1 rounded-md text-[#70706B] hover:text-[#171717]"
               >
                 <X className="w-4 h-4" />

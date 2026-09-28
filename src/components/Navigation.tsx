@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Search,
   CheckCircle2,
-  ExternalLink,
   Layers,
 } from 'lucide-react';
 import { UserProfile, ConnectedAccount } from '../types';
@@ -25,7 +24,6 @@ interface NavigationProps {
   isSyncing: boolean;
   onSyncNow: () => void;
   onOpenSearch: () => void;
-  onViewLanding?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -36,7 +34,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   isSyncing,
   onSyncNow,
   onOpenSearch,
-  onViewLanding,
 }) => {
   const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode; badge?: string }> = [
     { id: 'home', label: 'Home', icon: <Home className="w-4 h-4" /> },
@@ -68,16 +65,6 @@ export const Navigation: React.FC<NavigationProps> = ({
               </span>
             </div>
           </div>
-          {onViewLanding && (
-            <button
-              id="view-landing-btn"
-              onClick={onViewLanding}
-              title="View Marketing Site"
-              className="p-1.5 text-[#8A8A85] hover:text-[#171717] hover:bg-[#EDEDE9] rounded-md transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
 
         {/* Global Search Button (CMD+K) */}

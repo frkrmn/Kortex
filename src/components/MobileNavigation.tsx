@@ -11,7 +11,6 @@ import {
   Mail,
   Settings,
   X,
-  ExternalLink,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
@@ -224,16 +223,6 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                setIsMoreOpen(false);
-                navigate('/');
-              }}
-              className="w-full flex items-center justify-between p-3 rounded-xl bg-[#F0F0EB] text-xs font-medium text-[#171717]"
-            >
-              <span>View Marketing Site</span>
-              <ExternalLink className="w-3.5 h-3.5 text-[#70706B]" />
-            </button>
           </div>
         </div>
       )}

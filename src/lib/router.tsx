@@ -10,6 +10,11 @@ export type RouteType =
   | 'onboarding'
   | 'terms'
   | 'privacy'
+  | 'pricing'
+  | 'faq'
+  | 'how-it-works'
+  | 'demo'
+  | 'demo-bookmark'
   | 'dashboard'
   | 'bookmarks'
   | 'bookmark-detail'
@@ -31,7 +36,7 @@ interface RouterContextType {
 
 const RouterContext = createContext<RouterContextType | null>(null);
 
-function parseRoute(pathname: string): { route: RouteType; params: Record<string, string> } {
+export function parseRoute(pathname: string): { route: RouteType; params: Record<string, string> } {
   const cleanPath = pathname.replace(/\/$/, '') || '/';
 
   if (cleanPath === '/' || cleanPath === '') {
@@ -60,6 +65,22 @@ function parseRoute(pathname: string): { route: RouteType; params: Record<string
   }
   if (cleanPath === '/privacy') {
     return { route: 'privacy', params: {} };
+  }
+  if (cleanPath === '/pricing') {
+    return { route: 'pricing', params: {} };
+  }
+  if (cleanPath === '/faq') {
+    return { route: 'faq', params: {} };
+  }
+  if (cleanPath === '/how-it-works') {
+    return { route: 'how-it-works', params: {} };
+  }
+  if (cleanPath === '/demo') {
+    return { route: 'demo', params: {} };
+  }
+  const demoBookmarkMatch = cleanPath.match(/^\/demo\/bookmarks\/([^/]+)$/);
+  if (demoBookmarkMatch) {
+    return { route: 'demo-bookmark', params: { id: demoBookmarkMatch[1] } };
   }
   if (cleanPath === '/dashboard') {
     return { route: 'dashboard', params: {} };
@@ -97,6 +118,26 @@ function parseRoute(pathname: string): { route: RouteType; params: Record<string
 
   // Fallback default
   return { route: 'dashboard', params: {} };
+}
+
+const PUBLIC_ROUTES = new Set<RouteType>([
+  'landing',
+  'login',
+  'signup',
+  'forgot-password',
+  'reset-password',
+  'auth-callback',
+  'terms',
+  'privacy',
+  'pricing',
+  'faq',
+  'how-it-works',
+  'demo',
+  'demo-bookmark',
+]);
+
+export function isPublicRoute(route: RouteType): boolean {
+  return PUBLIC_ROUTES.has(route);
 }
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

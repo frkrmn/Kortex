@@ -11,8 +11,6 @@ import {
   PanelLeftClose,
   PanelLeft,
   Layers,
-  ExternalLink,
-  ChevronRight,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
@@ -152,21 +150,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
         >
           <Settings className={`w-4 h-4 ${route === 'settings' ? 'text-[#2563EB]' : 'text-[#70706B]'}`} />
           {!sidebarCollapsed && <span>Settings</span>}
-        </button>
-
-        {/* View Marketing / Landing */}
-        <button
-          onClick={() => navigate('/')}
-          title={sidebarCollapsed ? 'Marketing Site' : undefined}
-          className={`w-full flex items-center rounded-lg text-xs font-medium transition-colors cursor-pointer text-[#8A8A85] hover:text-[#171717] hover:bg-[#F2F2EE] ${
-            sidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-2.5 py-1.5'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <ExternalLink className="w-3.5 h-3.5" />
-            {!sidebarCollapsed && <span className="text-[11px]">Marketing Site</span>}
-          </div>
-          {!sidebarCollapsed && <ChevronRight className="w-3 h-3" />}
         </button>
 
         {/* User Card */}

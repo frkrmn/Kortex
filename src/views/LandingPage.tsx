@@ -18,12 +18,16 @@ import {
 import { DEFAULT_TRIAL_DAYS, DEFAULT_X_BOOKMARK_HISTORY_LIMIT, PLANS, X_HISTORY_EXPLANATION } from '../config/plans';
 
 interface LandingPageProps {
-  onEnterApp: () => void;
+  onExploreDemo: () => void;
+  onSignIn: () => void;
+  onGoHome: () => void;
   onStartOnboarding: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
-  onEnterApp,
+  onExploreDemo,
+  onSignIn,
+  onGoHome,
   onStartOnboarding,
 }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -72,12 +76,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 bg-[#FAFAF8]/90 backdrop-blur-md border-b border-[#E8E8E5]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={onEnterApp}>
+          <button type="button" className="flex items-center gap-2.5 cursor-pointer" onClick={onGoHome} aria-label="Recallly home">
             <div className="w-8 h-8 rounded-xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
               <Layers className="w-4 h-4" />
             </div>
             <span className="font-bold text-base tracking-tight">Recallly</span>
-          </div>
+          </button>
 
           <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-[#70706B]">
             <a href="#how-it-works" className="hover:text-[#171717] transition-colors">How it works</a>
@@ -88,7 +92,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <div className="flex items-center gap-2.5">
             <button
-              onClick={onEnterApp}
+              onClick={onSignIn}
               className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#70706B] hover:text-[#171717] transition-colors"
             >
               Sign In
@@ -130,7 +134,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
-            onClick={onEnterApp}
+            onClick={onExploreDemo}
             className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#FFFFFF] hover:bg-[#F7F7F5] border border-[#E8E8E5] text-[#171717] text-xs font-semibold transition-all shadow-2xs"
           >
             Explore interactive demo
@@ -498,7 +502,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="flex items-center gap-4 text-xs">
-            <button onClick={onEnterApp} className="hover:text-[#171717]">Interactive Demo</button>
+            <button onClick={onExploreDemo} className="hover:text-[#171717]">Interactive Demo</button>
             <button onClick={onStartOnboarding} className="hover:text-[#171717]">Get Started</button>
           </div>
         </div>

@@ -26,6 +26,7 @@ import { ForgotPasswordView } from './views/ForgotPasswordView';
 import { ResetPasswordView } from './views/ResetPasswordView';
 import { AuthCallbackView } from './views/AuthCallbackView';
 import { TermsView, PrivacyView } from './views/LegalViews';
+import { BlogIndexView, BlogArticleView } from './views/BlogViews';
 
 const AuthenticatedApplication: React.FC = () => {
   const { route } = useRouter();
@@ -140,6 +141,8 @@ const RouteBoundary: React.FC = () => {
   }
   if (route === 'terms') return <TermsView />;
   if (route === 'privacy') return <PrivacyView />;
+  if (route === 'blog') return <BlogIndexView />;
+  if (route === 'blog-article') return <BlogArticleView />;
   if (route === 'demo' || route === 'demo-bookmark') return <PublicDemoView />;
 
   // Authentication is mounted only for routes that use it. Public marketing,

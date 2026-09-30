@@ -504,6 +504,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="flex items-center gap-4 text-sm">
             <button onClick={onExploreDemo} className="hover:text-[#171717]">Interactive Demo</button>
             <button onClick={onStartOnboarding} className="hover:text-[#171717]">Get Started</button>
+            <a href="/blog" className="hover:text-[#171717]">Blog</a>
             <a href="/terms" className="hover:text-[#171717]">Terms</a>
             <a href="/privacy" className="hover:text-[#171717]">Privacy</a>
           </div>

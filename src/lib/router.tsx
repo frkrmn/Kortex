@@ -10,6 +10,8 @@ export type RouteType =
   | 'onboarding'
   | 'terms'
   | 'privacy'
+  | 'blog'
+  | 'blog-article'
   | 'pricing'
   | 'faq'
   | 'how-it-works'
@@ -65,6 +67,13 @@ export function parseRoute(pathname: string): { route: RouteType; params: Record
   }
   if (cleanPath === '/privacy') {
     return { route: 'privacy', params: {} };
+  }
+  if (cleanPath === '/blog') {
+    return { route: 'blog', params: {} };
+  }
+  const blogMatch = cleanPath.match(/^\/blog\/([^/]+)$/);
+  if (blogMatch) {
+    return { route: 'blog-article', params: { slug: decodeURIComponent(blogMatch[1]) } };
   }
   if (cleanPath === '/pricing') {
     return { route: 'pricing', params: {} };
@@ -129,6 +138,8 @@ const PUBLIC_ROUTES = new Set<RouteType>([
   'auth-callback',
   'terms',
   'privacy',
+  'blog',
+  'blog-article',
   'pricing',
   'faq',
   'how-it-works',

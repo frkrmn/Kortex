@@ -79,45 +79,72 @@ export const TermsView: React.FC = () => {
 export const PrivacyView: React.FC = () => {
   const { navigate } = useRouter();
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    const existingDescription = document.querySelector('meta[name="description"]');
+    const previousDescription = existingDescription?.getAttribute('content') ?? null;
+    const description = existingDescription ?? document.createElement('meta');
+
+    document.title = 'Privacy Policy | Recallly';
+    description.setAttribute('name', 'description');
+    description.setAttribute('content', 'Privacy Policy for Recallly, covering account, X bookmark, AI enrichment, billing, and service data.');
+    if (!existingDescription) document.head.appendChild(description);
+
+    return () => {
+      document.title = previousTitle;
+      if (existingDescription && previousDescription !== null) {
+        existingDescription.setAttribute('content', previousDescription);
+      } else if (!existingDescription) {
+        description.remove();
+      }
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#171717] py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto bg-[#FFFFFF] border border-[#E8E8E5] rounded-3xl p-8 sm:p-12 shadow-xs space-y-6">
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-8 text-[#171717] sm:px-6 sm:py-12 lg:px-8">
+      <div className="mx-auto max-w-3xl rounded-3xl border border-[#E8E8E5] bg-[#FFFFFF] p-6 shadow-xs sm:p-10 lg:p-12">
         <div className="flex items-center justify-between pb-4 border-b border-[#F0F0EC]">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
+          <button type="button" aria-label="Back to Recallly home" className="flex items-center gap-2.5" onClick={() => navigate('/')}>
             <div className="w-8 h-8 rounded-xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center">
               <Layers className="w-4 h-4" />
             </div>
             <span className="font-bold text-base tracking-tight">Recallly</span>
-          </div>
+          </button>
           <button
-            onClick={() => window.history.back()}
-            className="flex items-center gap-1.5 text-xs text-[#70706B] hover:text-[#171717] font-medium"
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1.5 text-sm text-[#70706B] hover:text-[#171717] font-medium"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="h-4 w-4" />
             <span>Back</span>
           </button>
         </div>
 
-        <h1 className="text-2xl font-bold tracking-tight text-[#171717]">Privacy Policy</h1>
-        <p className="text-xs text-[#8A8A85]">Last updated: September 2026</p>
+        <article aria-labelledby="privacy-title" className="pt-8">
+          <h1 id="privacy-title" className="text-3xl font-bold tracking-tight text-[#171717]">Privacy Policy</h1>
+          <p className="mt-2 text-sm text-[#70706B]">Last updated: September 2026</p>
 
-        <div className="prose prose-sm text-xs text-[#555550] space-y-4 leading-relaxed">
-          <p>
-            At Recallly, we treat your bookmarks and saved ideas with extreme privacy and care. This Privacy Policy describes how we collect, store, and safeguard your information.
-          </p>
-          <h2 className="text-sm font-bold text-[#171717] pt-2">1. Information We Collect</h2>
-          <p>
-            When you register, we collect your email address and display name. When you connect external sources, we store your saved bookmarks, post metadata, and author details strictly within your isolated user schema.
-          </p>
-          <h2 className="text-sm font-bold text-[#171717] pt-2">2. Security & Data Isolation</h2>
-          <p>
-            Your bookmarks and profile data are protected by strict PostgreSQL Row Level Security (RLS) policies. Only your authenticated user session can read or modify your items.
-          </p>
-          <h2 className="text-sm font-bold text-[#171717] pt-2">3. Third-Party Connections</h2>
-          <p>
-            When connecting services like X, we request strictly read-only permissions necessary to fetch your bookmarks. We never post on your behalf or access your direct messages.
-          </p>
-        </div>
+          <div className="mt-8 space-y-8 text-base leading-7 text-[#42423E]">
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">1. Scope</h2><p className="mt-3">This Privacy Policy explains how Recallly handles information when you visit the public site, create an account, connect X, use the Recallly application, or use its available AI, search, digest, export, and billing features.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">2. Account and authentication information</h2><p className="mt-3">When you sign up or sign in, Supabase Auth processes your authentication information. Depending on how you sign in, this can include your email address, password-related authentication records, session information, and Google sign-in information when Google authentication is enabled. Recallly stores the profile information needed to operate the account, such as display name, avatar, and timezone when provided.</p><p className="mt-3">The browser uses Supabase's supported session persistence and refresh behavior. Recallly does not ask you to provide your Supabase password to Recallly and does not expose session credentials in the application interface.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">3. X-connected information</h2><p className="mt-3">When you connect X, Recallly uses X's OAuth 2.0 flow with read-only scopes for reading tweets, users, and bookmarks, plus offline access for authorized synchronization. Recallly may receive and store the X account identifier, username, display information, avatar URL or related metadata, synchronization status, and timestamps needed to maintain the connection.</p><p className="mt-3">OAuth access and refresh tokens are encrypted and kept on the server. They are not returned through the browser's data views. Recallly does not receive your X password, post to X, send direct messages, or request unrelated write permissions.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">4. Imported bookmarks and content</h2><p className="mt-3">For bookmarks made available by X, Recallly may store the post text, post and author identifiers, author name and username, profile image reference, canonical URL, publication and import timestamps, conversation and referenced-post metadata, media metadata and permitted media URLs, language, read/favorite state, and synchronization metadata. The exact fields depend on what X returns and what remains available through its API.</p><p className="mt-3">Disconnecting X removes the stored authorization for that connection. Imported bookmarks and their Recallly enrichment remain in your library unless you remove them through an available product control. Recallly does not claim that all historical X bookmarks will always be available.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">5. AI processing</h2><p className="mt-3">Recallly can send saved bookmark text and relevant post metadata to configured AI services to provide enrichment such as summaries, categories, topics, and key concepts. When a stored image is available and the feature supports it, the text and image may be sent together for multimodal enrichment. Current bookmark enrichment uses Google Gemini.</p><p className="mt-3">AI processing is performed to provide the requested Recallly feature. AI providers may process submitted content under their own terms and policies. This Policy does not make unsupported claims about a provider's retention, training, or data-use practices; review the applicable provider information for those details. Recallly does not use this Policy to promise that AI output is accurate or that a provider will always be available.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">6. Information stored in Recallly</h2><p className="mt-3">Depending on the features you use, Recallly stores account and profile information, saved items and their enrichment, topics and categories, collections and collection membership, digest settings and generated digests, chat threads and messages, connected-account metadata, synchronization and processing jobs, subscription state, and provider usage or accounting records needed to operate and protect the service. These records are associated with the authenticated account and protected by server-side authorization and database access controls.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">7. Billing and payment information</h2><p className="mt-3">If you subscribe, Stripe processes payment details through Stripe Checkout and the billing portal. Recallly stores subscription and billing references such as Stripe customer or subscription identifiers, plan and status, billing-period dates, cancellation state, and related webhook metadata. Recallly does not receive or store your full card number through the application database.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">8. Technical data, cookies, and browser storage</h2><p className="mt-3">Recallly uses information needed to deliver and secure the service, such as request and authentication context handled by the hosting, authentication, and API infrastructure. The Supabase client persists its supported session state in browser storage so a user can remain signed in and refresh tokens. The X OAuth callback uses a short-lived, HttpOnly browser binding cookie to protect the OAuth flow. The public Interactive Demo uses a separate local-storage fixture namespace so demo interactions do not access production account data. No analytics or advertising tracker was found in the current application.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">9. How information is used</h2><ul className="mt-3 list-disc space-y-2 pl-6"><li>authenticate users and protect account access;</li><li>import, synchronize, organize, search, and display saved bookmarks;</li><li>generate available AI enrichment, digests, and related product features;</li><li>process subscriptions and provide billing management;</li><li>send configured product or digest email through Resend when enabled;</li><li>maintain, secure, troubleshoot, and improve the service; and</li><li>comply with applicable legal obligations and enforce the Terms of Service.</li></ul></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">10. Service providers and sharing</h2><p className="mt-3">Recallly shares information with service providers only as needed for the implemented service: Supabase for authentication and database infrastructure, X for OAuth and bookmark access, Google Gemini for configured AI enrichment, Stripe for checkout and subscription billing, Vercel for hosting and scheduled operations, and Resend for enabled email delivery. Providers may process information in other countries and under their own policies. Recallly does not sell your personal information or make your private library public.</p><p className="mt-3">Recallly may disclose information when reasonably necessary to comply with law, respond to valid legal process, protect users or the service, investigate abuse, or support a business transfer. The application does not provide a public endpoint for another user to read your library or enrichment.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">11. Retention</h2><p className="mt-3">Recallly does not publish a fixed retention period in the current product. Information is kept as needed to provide the features you use, maintain security and accounting records, comply with legal obligations, and resolve disputes. Disconnecting X does not by itself delete imported bookmarks. Because no self-service account-deletion workflow is currently exposed in Settings, this Policy does not promise a deletion timeline that the application does not implement.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">12. Export, deletion, and controls</h2><p className="mt-3">Authenticated users can download the JSON export offered in Settings. It can include profile information, saved items, completed AI enrichment, collections, digests, and related account data. The application also provides a confirmation-based library-clearing operation where enabled; that operation is distinct from deleting the account. Disconnecting X removes stored authorization while leaving imported library content available. No account-level deletion button is currently offered in the user interface.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">13. Security</h2><p className="mt-3">Recallly uses authenticated server requests, account-scoped access controls, database row-level policies, encrypted X OAuth tokens, and server-only provider credentials as part of its security design. No method of transmission or storage is guaranteed to be completely secure, so protect your account credentials and report suspected compromise through the contact channel Recallly makes available.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">14. International processing</h2><p className="mt-3">Recallly and its service providers may process information in countries other than where you live. The specific location and transfer mechanism can depend on the provider and deployment configuration. This Policy does not claim a particular data-residency region or contractual transfer mechanism that has not been verified.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">15. Children</h2><p className="mt-3">Recallly is not directed to children who are not legally able to agree to its Terms of Service. Do not create an account or provide personal information if you are not eligible to use the service under those Terms. Recallly does not knowingly seek personal information from children.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">16. Privacy choices and rights</h2><p className="mt-3">Depending on where you live, you may have rights over your personal information, such as access, correction, export, deletion, restriction, objection, or a right to complain to a relevant authority. The export and deletion-related controls described above are the controls currently implemented by Recallly. Any additional request instructions will be provided through the contact channel Recallly makes available.</p></section>
+            <section><h2 className="text-xl font-bold leading-7 text-[#171717]">17. Changes to this Policy</h2><p className="mt-3">Recallly may update this Policy as the service or its providers change. The current version and revision date will be posted on this page. Review it periodically to understand the information practices that apply when you use Recallly.</p></section>
+          </div>
+          <p className="mt-10 border-t border-[#F0F0EC] pt-6 text-sm leading-6 text-[#70706B]">Please also review our <a className="font-semibold text-[#171717] underline underline-offset-2" href="/terms">Terms of Service</a>.</p>
+        </article>
       </div>
     </div>
   );

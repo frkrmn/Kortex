@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DemoStoreProvider, useDemoStore } from './lib/store/demo-store';
 import { RouterProvider, isPublicRoute, useRouter } from './lib/router';
+import { getRouteSeo, usePageSeo } from './lib/seo';
 import { AuthProvider, useAuth } from './lib/auth/auth-context';
 import { AppSidebar } from './components/AppSidebar';
 import { MobileNavigation } from './components/MobileNavigation';
@@ -27,6 +28,8 @@ import { ResetPasswordView } from './views/ResetPasswordView';
 import { AuthCallbackView } from './views/AuthCallbackView';
 import { TermsView, PrivacyView } from './views/LegalViews';
 import { BlogIndexView, BlogArticleView } from './views/BlogViews';
+import { FaqView, HowItWorksView, PricingView } from './views/MarketingViews';
+import { NotFoundView } from './views/NotFoundView';
 
 const AuthenticatedApplication: React.FC = () => {
   const { route } = useRouter();
@@ -112,24 +115,11 @@ const AuthenticatedRoutes: React.FC = () => {
 };
 
 const RouteBoundary: React.FC = () => {
-  const { route, navigate } = useRouter();
-  const marketingSection = route === 'pricing'
-    ? 'pricing'
-    : route === 'faq'
-      ? 'faq'
-      : route === 'how-it-works'
-        ? 'how-it-works'
-        : null;
+  const { route, params, navigate } = useRouter();
+  const seo = React.useMemo(() => getRouteSeo(route, params), [route, params]);
+  usePageSeo(seo);
 
-  useEffect(() => {
-    if (!marketingSection) return;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(marketingSection)?.scrollIntoView({ block: 'start' });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [marketingSection]);
-
-  if (route === 'landing' || marketingSection) {
+  if (route === 'landing') {
     return (
       <LandingPage
         onExploreDemo={() => navigate('/demo')}
@@ -141,9 +131,13 @@ const RouteBoundary: React.FC = () => {
   }
   if (route === 'terms') return <TermsView />;
   if (route === 'privacy') return <PrivacyView />;
+  if (route === 'pricing') return <PricingView />;
+  if (route === 'faq') return <FaqView />;
+  if (route === 'how-it-works') return <HowItWorksView />;
   if (route === 'blog') return <BlogIndexView />;
   if (route === 'blog-article') return <BlogArticleView />;
   if (route === 'demo' || route === 'demo-bookmark') return <PublicDemoView />;
+  if (route === 'not-found') return <NotFoundView />;
 
   // Authentication is mounted only for routes that use it. Public marketing,
   // legal, and demo routes do not hydrate private account or bookmark state.

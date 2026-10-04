@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const legal = fs.readFileSync(new URL('./views/LegalViews.tsx', import.meta.url), 'utf8');
 const privacy = legal.split('export const PrivacyView')[1];
+const seo = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 
 test('Privacy Policy reflects implemented Recallly data flows', () => {
   for (const heading of [
@@ -18,8 +19,8 @@ test('Privacy Policy reflects implemented Recallly data flows', () => {
     'Export, deletion, and controls',
     'Privacy choices and rights',
   ]) assert.match(privacy, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(privacy, /Privacy Policy \| Recallly/);
-  assert.match(privacy, /meta\[name="description"\]/);
+  assert.match(seo, /Privacy Policy \| Recallly/);
+  assert.match(seo, /canonicalPath: '\/privacy'/);
   assert.match(privacy, /href="\/terms"/);
   assert.doesNotMatch(privacy, /PostHog|Google Analytics|Sentry/);
   assert.match(privacy, /does not publish a fixed retention period/);

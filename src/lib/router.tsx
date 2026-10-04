@@ -12,6 +12,7 @@ export type RouteType =
   | 'privacy'
   | 'blog'
   | 'blog-article'
+  | 'not-found'
   | 'pricing'
   | 'faq'
   | 'how-it-works'
@@ -125,8 +126,7 @@ export function parseRoute(pathname: string): { route: RouteType; params: Record
     return { route: 'settings', params: {} };
   }
 
-  // Fallback default
-  return { route: 'dashboard', params: {} };
+  return { route: 'not-found', params: {} };
 }
 
 const PUBLIC_ROUTES = new Set<RouteType>([
@@ -140,6 +140,7 @@ const PUBLIC_ROUTES = new Set<RouteType>([
   'privacy',
   'blog',
   'blog-article',
+  'not-found',
   'pricing',
   'faq',
   'how-it-works',

@@ -5,6 +5,7 @@ import test from 'node:test';
 const terms = fs.readFileSync(new URL('./views/LegalViews.tsx', import.meta.url), 'utf8');
 const termsView = terms.split('export const PrivacyView')[0];
 const landing = fs.readFileSync(new URL('./views/LandingPage.tsx', import.meta.url), 'utf8');
+const seo = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 
 test('Terms are a public, substantive, Recallly-specific legal page', () => {
   for (const heading of [
@@ -19,8 +20,8 @@ test('Terms are a public, substantive, Recallly-specific legal page', () => {
     'Disclaimers',
     'Limitation of liability',
   ]) assert.match(termsView, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(termsView, /Terms of Service \| Recallly/);
-  assert.match(termsView, /meta\[name="description"\]/);
+  assert.match(seo, /Terms of Service \| Recallly/);
+  assert.match(seo, /canonicalPath: '\/terms'/);
   assert.doesNotMatch(termsView, /100% ownership|Row Level Security \(RLS\)/);
   assert.doesNotMatch(termsView, /14-day|14 day|\$12|Import Credits|credit pack/);
 });

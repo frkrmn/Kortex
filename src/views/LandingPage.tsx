@@ -7,7 +7,6 @@ import {
   Sparkles,
   Search,
   MessageSquareText,
-  Mail,
   FolderKanban,
   TrendingUp,
   ChevronDown,
@@ -15,7 +14,8 @@ import {
   Lock,
   ExternalLink,
 } from 'lucide-react';
-import { DEFAULT_TRIAL_DAYS, DEFAULT_X_BOOKMARK_HISTORY_LIMIT, PLANS, X_HISTORY_EXPLANATION } from '../config/plans';
+import { DEFAULT_TRIAL_DAYS, PLANS, X_HISTORY_EXPLANATION } from '../config/plans';
+import { marketingFaqs } from '../content/marketing';
 
 interface LandingPageProps {
   onExploreDemo: () => void;
@@ -31,45 +31,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onStartOnboarding,
 }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-
-  const faqs = [
-    {
-      q: 'How many X bookmarks can Recallly import?',
-      a: `${X_HISTORY_EXPLANATION} The current product safeguard is approximately the latest ${DEFAULT_X_BOOKMARK_HISTORY_LIMIT.toLocaleString()} bookmarks. Once connected, Recallly can continue syncing new bookmarks so your library keeps growing over time.`,
-    },
-    {
-      q: 'Will Recallly keep syncing new bookmarks?',
-      a: 'Recallly currently provides manual X bookmark sync. Automatic Pro sync is tracked separately and is not generally enabled yet.',
-    },
-    {
-      q: 'Can my Recallly library grow beyond the initial import window?',
-      a: 'Yes. The historical window applies only to bookmarks X makes available during the initial import. New bookmarks can continue being added after you connect your account.',
-    },
-    {
-      q: 'What happens if an X post is deleted?',
-      a: 'If a post becomes unavailable on X, Recallly may mark the original content as unavailable. Your Recallly organization, such as collections and notes, can remain where appropriate.',
-    },
-    {
-      q: 'What permissions does Recallly request from my X account?',
-      a: 'We only request read-only permissions (bookmark.read and tweet.read). We cannot post tweets, send direct messages, follow accounts, or access your password. Your account remains 100% under your control.',
-    },
-    {
-      q: 'How does semantic search work?',
-      a: 'Traditional keyword search fails when you remember the concept rather than the exact wording. Recallly converts each post and summary into vector embeddings, allowing you to search by idea (e.g., "fast databases" will match posts talking about DuckDB or SQLite even without the word "fast").',
-    },
-    {
-      q: 'Will you support platforms other than X?',
-      a: 'Yes! Recallly is built on a modular SourceProvider architecture. Reddit, LinkedIn, YouTube, Substack, and direct web URLs are already in active development.',
-    },
-    {
-      q: 'Can I export my data if I want to leave?',
-      a: 'You can export your Recallly library, including available saved content, AI summaries, collections, and digests, as structured JSON.',
-    },
-    {
-      q: 'What is included in the 7-day free trial?',
-      a: 'Stripe Checkout shows the current trial eligibility, Pro access, price, and payment terms before you confirm.',
-    },
-  ];
 
   return (
     <div id="landing-page" className="min-h-screen bg-[#FAFAF8] text-[#171717] selection:bg-[#E5E5E0]">
@@ -280,7 +241,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="font-semibold text-base text-[#171717]">Research & Rediscover</h3>
             <p className="text-base text-[#5C5C58] leading-7">
-              Search by concept, converse with your archive using Ask AI, and receive personalized weekly digests.
+              Search saved content, narrow the library by category and topic, and reopen the original source when context matters.
             </p>
           </div>
         </div>
@@ -299,33 +260,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-6 rounded-2xl bg-[#FAFAF8] border border-[#E8E8E5] space-y-3">
               <Search className="w-5 h-5 text-[#171717]" />
-              <h3 className="font-semibold text-base text-[#171717]">Semantic Search (Not Just Keywords)</h3>
+              <h3 className="font-semibold text-base text-[#171717]">Search & Filter</h3>
               <p className="text-base text-[#5C5C58] leading-7">
-                Query ideas naturally. Search "pricing strategy" and locate posts analyzing ARPU, tiering, and freemium economics.
+                Search saved text and enrichment, then filter within broad categories and specific topics.
               </p>
             </div>
 
             <div className="p-6 rounded-2xl bg-[#FAFAF8] border border-[#E8E8E5] space-y-3">
-              <MessageSquareText className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-semibold text-base text-[#171717]">Ask AI: Conversational RAG</h3>
+              <Sparkles className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-semibold text-base text-[#171717]">AI Summaries & Topics</h3>
               <p className="text-base text-[#5C5C58] leading-7">
-                Ask your library questions. Receive comprehensive synthesized answers complete with direct citations to original threads.
+                Add a concise summary, one primary category, focused topics, and key concepts to eligible saved posts.
               </p>
             </div>
 
             <div className="p-6 rounded-2xl bg-[#FAFAF8] border border-[#E8E8E5] space-y-3">
-              <Mail className="w-5 h-5 text-purple-600" />
-              <h3 className="font-semibold text-base text-[#171717]">Weekly Intelligence Digest</h3>
+              <ExternalLink className="w-5 h-5 text-purple-600" />
+              <h3 className="font-semibold text-base text-[#171717]">Rich Bookmark Reader</h3>
               <p className="text-base text-[#5C5C58] leading-7">
-                Delivered straight to your email every Sunday: categorized themes, recurring ideas, and resurfaced forgotten bookmarks.
+                Read stored post text and available media in Recallly while keeping the original X source one click away.
               </p>
             </div>
 
             <div className="p-6 rounded-2xl bg-[#FAFAF8] border border-[#E8E8E5] space-y-3">
               <FolderKanban className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-semibold text-base text-[#171717]">Curated Shareable Collections</h3>
+              <h3 className="font-semibold text-base text-[#171717]">Collections & Export</h3>
               <p className="text-base text-[#5C5C58] leading-7">
-                Bundle your best bookmarks into beautiful public libraries to share with colleagues or publish on your personal site.
+                Group useful bookmarks into collections and export the account data currently available in Settings as JSON.
               </p>
             </div>
           </div>
@@ -463,7 +424,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="space-y-3">
-            {faqs.map((faq, i) => {
+            {marketingFaqs.map((faq, i) => {
               const isOpen = openFaq === i;
               return (
                 <div
@@ -474,12 +435,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     onClick={() => setOpenFaq(isOpen ? null : i)}
                     className="w-full p-4 text-left flex items-center justify-between gap-4 text-base leading-6 font-semibold text-[#171717] hover:bg-[#FAFAF8]"
                   >
-                    <span>{faq.q}</span>
+                    <span>{faq.question}</span>
                     {isOpen ? <ChevronUp className="w-4 h-4 text-[#8A8A85]" /> : <ChevronDown className="w-4 h-4 text-[#8A8A85]" />}
                   </button>
                   {isOpen && (
                     <div className="p-4 pt-0 text-base text-[#5C5C58] leading-7 bg-[#FAFAF8]/50">
-                      {faq.a}
+                      {faq.answer}
                     </div>
                   )}
                 </div>
@@ -501,13 +462,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <span>Saving something should be the beginning of its usefulness.</span>
           </div>
 
-          <div className="flex items-center gap-4 text-sm">
+          <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <button onClick={onExploreDemo} className="hover:text-[#171717]">Interactive Demo</button>
             <button onClick={onStartOnboarding} className="hover:text-[#171717]">Get Started</button>
+            <a href="/how-it-works" className="hover:text-[#171717]">How it works</a>
+            <a href="/pricing" className="hover:text-[#171717]">Pricing</a>
+            <a href="/faq" className="hover:text-[#171717]">FAQ</a>
             <a href="/blog" className="hover:text-[#171717]">Blog</a>
             <a href="/terms" className="hover:text-[#171717]">Terms</a>
             <a href="/privacy" className="hover:text-[#171717]">Privacy</a>
-          </div>
+          </nav>
         </div>
       </footer>
     </div>

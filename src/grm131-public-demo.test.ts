@@ -30,10 +30,14 @@ test('private application routes remain outside the public boundary', () => {
     '/digests',
     '/digests/private-id',
     '/settings',
-    '/unknown-route',
   ]) {
     assert.equal(isPublicRoute(parseRoute(path).route), false, `${path} must remain protected`);
   }
+});
+
+test('unknown routes render the public noindex not-found surface', () => {
+  assert.deepEqual(parseRoute('/unknown-route'), { route: 'not-found', params: {} });
+  assert.equal(isPublicRoute('not-found'), true);
 });
 
 test('marketing section deep links remain public', () => {

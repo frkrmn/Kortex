@@ -6,6 +6,7 @@ import { parseRoute, isPublicRoute } from './lib/router';
 const blogView = fs.readFileSync(new URL('./views/BlogViews.tsx', import.meta.url), 'utf8');
 const content = fs.readFileSync(new URL('./content/blog.ts', import.meta.url), 'utf8');
 const sitemap = fs.readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
+const seo = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 
 test('blog routes are public and article slugs resolve', () => {
   assert.deepEqual(parseRoute('/blog'), { route: 'blog', params: {} });
@@ -20,8 +21,9 @@ test('blog content has a small, maintainable initial set with complete metadata'
   for (const field of ['description:', 'author:', 'publishedAt:', 'readingTime:', 'category:', 'relatedSlugs:']) {
     assert.match(content, new RegExp(field));
   }
-  assert.match(blogView, /application\/ld\+json/);
-  assert.match(blogView, /rel="canonical"/);
+  assert.match(seo, /BlogPosting/);
+  assert.match(seo, /BreadcrumbList/);
+  assert.match(seo, /canonicalPath: `\/blog\/\$\{article\.slug\}`/);
   assert.match(blogView, /Related articles/);
   assert.match(blogView, /Explore the demo/);
 });

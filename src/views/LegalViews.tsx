@@ -1,30 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Layers, ArrowLeft } from 'lucide-react';
 import { useRouter } from '../lib/router';
 
 export const TermsView: React.FC = () => {
   const { navigate } = useRouter();
-
-  useEffect(() => {
-    const previousTitle = document.title;
-    const existingDescription = document.querySelector('meta[name="description"]');
-    const previousDescription = existingDescription?.getAttribute('content') ?? null;
-    const description = existingDescription ?? document.createElement('meta');
-
-    document.title = 'Terms of Service | Recallly';
-    description.setAttribute('name', 'description');
-    description.setAttribute('content', 'Terms of Service for Recallly, an X bookmark organization and personal knowledge service.');
-    if (!existingDescription) document.head.appendChild(description);
-
-    return () => {
-      document.title = previousTitle;
-      if (existingDescription && previousDescription !== null) {
-        existingDescription.setAttribute('content', previousDescription);
-      } else if (!existingDescription) {
-        description.remove();
-      }
-    };
-  }, []);
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] px-4 py-8 text-[#171717] sm:px-6 sm:py-12 lg:px-8">
@@ -78,27 +57,6 @@ export const TermsView: React.FC = () => {
 
 export const PrivacyView: React.FC = () => {
   const { navigate } = useRouter();
-
-  useEffect(() => {
-    const previousTitle = document.title;
-    const existingDescription = document.querySelector('meta[name="description"]');
-    const previousDescription = existingDescription?.getAttribute('content') ?? null;
-    const description = existingDescription ?? document.createElement('meta');
-
-    document.title = 'Privacy Policy | Recallly';
-    description.setAttribute('name', 'description');
-    description.setAttribute('content', 'Privacy Policy for Recallly, covering account, X bookmark, AI enrichment, billing, and service data.');
-    if (!existingDescription) document.head.appendChild(description);
-
-    return () => {
-      document.title = previousTitle;
-      if (existingDescription && previousDescription !== null) {
-        existingDescription.setAttribute('content', previousDescription);
-      } else if (!existingDescription) {
-        description.remove();
-      }
-    };
-  }, []);
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] px-4 py-8 text-[#171717] sm:px-6 sm:py-12 lg:px-8">

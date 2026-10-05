@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { blogArticles } from '../src/content/blog';
-import { getRouteSeo, SITE_URL, type SeoConfig } from '../src/lib/seo';
+import { getRouteSeo, getRouteSocialImage, SITE_URL, type SeoConfig } from '../src/lib/seo';
 import type { RouteType } from '../src/lib/router';
 
 const DIST = path.resolve('dist');
@@ -28,9 +28,10 @@ const escapeAttribute = (value: string) => value.replaceAll('&', '&amp;').replac
 function render(pagePath: string, config: SeoConfig) {
   const canonical = config.canonicalPath ? `${SITE_URL}${config.canonicalPath}` : null;
   const ogUrl = canonical || `${SITE_URL}${pagePath}`;
+  const socialImage = getRouteSocialImage(config);
   const cleaned = base
     .replace(/\s*<title>[\s\S]*?<\/title>/i, '')
-    .replace(/\s*<meta\s+(?:name="description"|property="og:(?:title|description|type|url)"|name="twitter:(?:card|title|description)")[^>]*>/gi, '')
+    .replace(/\s*<meta\s+(?:name="description"|property="og:(?:title|description|type|url|image|image:alt)"|name="twitter:(?:card|title|description|image)")[^>]*>/gi, '')
     .replace(/\s*<meta\s+name="robots"[^>]*>/gi, '')
     .replace(/\s*<link\s+rel="canonical"[^>]*>/gi, '')
     .replace(/\s*<script[^>]*data-recallly-seo-schema="true"[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -43,9 +44,12 @@ function render(pagePath: string, config: SeoConfig) {
     `<meta property="og:description" content="${escapeAttribute(config.description)}" />`,
     `<meta property="og:type" content="${config.ogType || 'website'}" />`,
     `<meta property="og:url" content="${ogUrl}" />`,
-    '<meta name="twitter:card" content="summary" />',
+    `<meta name="twitter:card" content="${socialImage ? 'summary_large_image' : 'summary'}" />`,
     `<meta name="twitter:title" content="${escapeAttribute(config.title)}" />`,
     `<meta name="twitter:description" content="${escapeAttribute(config.description)}" />`,
+    socialImage ? `<meta property="og:image" content="${socialImage}" />` : '',
+    socialImage ? '<meta property="og:image:alt" content="Find Again — Find what you saved. When you need it again." />' : '',
+    socialImage ? `<meta name="twitter:image" content="${socialImage}" />` : '',
     ...(config.schemas || []).map(schema => `<script type="application/ld+json" data-recallly-seo-schema="true">${JSON.stringify(schema).replaceAll('<', '\\u003c')}</script>`),
   ].filter(Boolean).join('\n    ');
   return cleaned.replace('</head>', `    ${head}\n  </head>`);

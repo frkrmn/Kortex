@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { blogArticles } from './content/blog';
-import { getRouteSeo, SITE_URL } from './lib/seo';
+import { getRouteSeo, getRouteSocialImage, SITE_URL, SOCIAL_IMAGE_PATH } from './lib/seo';
 import { isPublicRoute, parseRoute, type RouteType } from './lib/router';
 
 const sitemap = fs.readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
@@ -10,6 +10,7 @@ const robots = fs.readFileSync(new URL('../public/robots.txt', import.meta.url),
 const vercel = fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8');
 const seoSource = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 const landingSource = fs.readFileSync(new URL('./views/LandingPage.tsx', import.meta.url), 'utf8');
+const socialImage = fs.readFileSync(new URL('../public/find-again-social.png', import.meta.url));
 
 const acquisitionRoutes: Array<[RouteType, string, string]> = [
   ['landing', '/', ''],
@@ -34,6 +35,26 @@ test('indexable acquisition pages have unique complete metadata', () => {
     titles.add(seo.title);
     descriptions.add(seo.description);
   }
+});
+
+test('public pages share the Find Again social image while account routes do not', () => {
+  const publicRoutes: RouteType[] = ['landing', 'pricing', 'faq', 'how-it-works', 'demo', 'blog', 'blog-article', 'terms', 'privacy'];
+  for (const route of publicRoutes) {
+    const seo = getRouteSeo(route, route === 'blog-article' ? { slug: blogArticles[0].slug } : {});
+    assert.equal(getRouteSocialImage(seo), `${SITE_URL}${SOCIAL_IMAGE_PATH}`, `${route} social preview`);
+  }
+  for (const route of ['login', 'signup', 'auth-callback', 'settings', 'dashboard'] as RouteType[]) {
+    assert.equal(getRouteSocialImage(getRouteSeo(route, {})), undefined, `${route} must not expose public social metadata`);
+  }
+  assert.equal(getRouteSocialImage(getRouteSeo('blog-article', { slug: 'missing' })), `${SITE_URL}${SOCIAL_IMAGE_PATH}`);
+});
+
+test('Find Again social image is a standard-size PNG with no legacy brand text payload', () => {
+  assert.equal(socialImage.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(socialImage.readUInt32BE(16), 1200);
+  assert.equal(socialImage.readUInt32BE(20), 630);
+  const payload = socialImage.toString('latin1');
+  assert.doesNotMatch(payload, /Recallly|KortexMarks|Kortex/);
 });
 
 test('demo, auth, private, and invalid routes cannot become indexable', () => {

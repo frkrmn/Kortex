@@ -4,6 +4,7 @@ import { getBlogArticle } from '../content/blog';
 import { marketingFaqs } from '../content/marketing';
 
 export const SITE_URL = 'https://kortexmarks.vercel.app';
+export const SOCIAL_IMAGE_PATH = '/find-again-social.png';
 
 export type SeoConfig = {
   title: string;
@@ -13,6 +14,10 @@ export type SeoConfig = {
   ogType?: 'website' | 'article';
   schemas?: Record<string, unknown>[];
 };
+
+export function getRouteSocialImage(config: SeoConfig): string | undefined {
+  return config.robots === 'noindex,nofollow' ? undefined : `${SITE_URL}${SOCIAL_IMAGE_PATH}`;
+}
 
 const webPage = (name: string, description: string, path: string) => ({ '@context': 'https://schema.org', '@type': 'WebPage', name, description, url: `${SITE_URL}${path}` });
 
@@ -71,9 +76,17 @@ export function usePageSeo(config: SeoConfig) {
     // Never reflect search parameters into metadata. Auth callbacks and private
     // routes may carry short-lived values that must not be copied into the DOM.
     ensureMeta('meta[property="og:url"]', { property: 'og:url', content: config.canonicalPath ? `${SITE_URL}${config.canonicalPath}` : `${SITE_URL}${window.location.pathname}` });
-    ensureMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary' });
+    const socialImage = getRouteSocialImage(config);
+    ensureMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: socialImage ? 'summary_large_image' : 'summary' });
     ensureMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: config.title });
     ensureMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: config.description });
+    if (socialImage) {
+      ensureMeta('meta[property="og:image"]', { property: 'og:image', content: socialImage });
+      ensureMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: 'Find Again — Find what you saved. When you need it again.' });
+      ensureMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: socialImage });
+    } else {
+      document.querySelectorAll('meta[property="og:image"], meta[property="og:image:alt"], meta[name="twitter:image"]').forEach(node => node.remove());
+    }
 
     const existingCanonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (config.canonicalPath) {

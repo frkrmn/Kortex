@@ -23,37 +23,37 @@ const webPage = (name: string, description: string, path: string) => ({ '@contex
 
 export function getRouteSeo(route: RouteType, params: Record<string, string>): SeoConfig {
   if (route === 'landing') return {
-    title: 'Recallly — AI X Bookmark Manager and Reader',
+    title: 'Find Again — AI X Bookmark Manager and Reader',
     description: 'Organize, search, read, and rediscover saved X bookmarks with AI summaries, categories, topics, and original source links.',
     canonicalPath: '/', robots: 'index,follow', schemas: [{ '@context': 'https://schema.org', '@graph': [
-      { '@type': 'WebSite', name: 'Recallly', url: SITE_URL },
-      { '@type': 'WebApplication', name: 'Recallly', url: SITE_URL, applicationCategory: 'ProductivityApplication', operatingSystem: 'Web', description: 'A personal library for organizing, reading, and rediscovering saved X bookmarks.' },
+      { '@type': 'WebSite', name: 'Find Again', url: SITE_URL },
+      { '@type': 'WebApplication', name: 'Find Again', url: SITE_URL, applicationCategory: 'ProductivityApplication', operatingSystem: 'Web', description: 'A personal library for organizing, reading, and rediscovering saved X bookmarks.' },
     ] }],
   };
-  if (route === 'pricing') return { title: 'Recallly Pricing — Free and Pro X Bookmark Plans', description: 'Compare Recallly Free and Pro capabilities. Stripe Checkout shows current Pro pricing, trial eligibility, interval, and payment terms.', canonicalPath: '/pricing', robots: 'index,follow', schemas: [webPage('Recallly Pricing', 'Free and Pro plans for organizing X bookmarks.', '/pricing')] };
-  if (route === 'how-it-works') return { title: 'How Recallly Organizes and Searches X Bookmarks', description: 'See how Recallly imports saved X posts, adds AI summaries and topics, and makes bookmarks searchable and readable in one library.', canonicalPath: '/how-it-works', robots: 'index,follow', schemas: [webPage('How Recallly Works', 'How Recallly imports, enriches, and helps rediscover X bookmarks.', '/how-it-works')] };
-  if (route === 'faq') return { title: 'Recallly FAQ — X Bookmark Import, AI, and Data', description: 'Answers about Recallly bookmark import, X permissions, AI enrichment, search, data export, trials, and subscription behavior.', canonicalPath: '/faq', robots: 'index,follow', schemas: [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: marketingFaqs.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) }] };
-  if (route === 'blog') return { title: 'Recallly Blog — Bookmark Workflows and Rediscovery', description: 'Practical guides for organizing, searching, and getting more value from saved X bookmarks.', canonicalPath: '/blog', robots: 'index,follow', schemas: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Recallly Blog', description: 'Practical guides for organizing, searching, and rediscovering saved X bookmarks.', url: `${SITE_URL}/blog` }] };
+  if (route === 'pricing') return { title: 'Find Again Pricing — Free and Pro X Bookmark Plans', description: 'Compare Find Again Free and Pro capabilities. Stripe Checkout shows current Pro pricing, trial eligibility, interval, and payment terms.', canonicalPath: '/pricing', robots: 'index,follow', schemas: [webPage('Find Again Pricing', 'Free and Pro plans for organizing X bookmarks.', '/pricing')] };
+  if (route === 'how-it-works') return { title: 'How Find Again Organizes and Searches X Bookmarks', description: 'See how Find Again imports saved X posts, adds AI summaries and topics, and makes bookmarks searchable and readable in one library.', canonicalPath: '/how-it-works', robots: 'index,follow', schemas: [webPage('How Find Again Works', 'How Find Again imports, enriches, and helps rediscover X bookmarks.', '/how-it-works')] };
+  if (route === 'faq') return { title: 'Find Again FAQ — X Bookmark Import, AI, and Data', description: 'Answers about Find Again bookmark import, X permissions, AI enrichment, search, data export, trials, and subscription behavior.', canonicalPath: '/faq', robots: 'index,follow', schemas: [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: marketingFaqs.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) }] };
+  if (route === 'blog') return { title: 'Find Again Blog — Bookmark Workflows and Rediscovery', description: 'Practical guides for organizing, searching, and getting more value from saved X bookmarks.', canonicalPath: '/blog', robots: 'index,follow', schemas: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Find Again Blog', description: 'Practical guides for organizing, searching, and rediscovering saved X bookmarks.', url: `${SITE_URL}/blog` }] };
   if (route === 'blog-article') {
     const article = getBlogArticle(params.slug);
-    if (!article) return { title: 'Article Not Found | Recallly', description: 'The requested Recallly article is not available.', robots: 'noindex,follow' };
+    if (!article) return { title: 'Article Not Found | Find Again', description: 'The requested Find Again article is not available.', robots: 'noindex,follow' };
     const schemas: Record<string, unknown>[] = [
       { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title, description: article.description, author: { '@type': 'Organization', name: article.author }, datePublished: article.publishedAt, dateModified: article.updatedAt || article.publishedAt, mainEntityOfPage: `${SITE_URL}/blog/${article.slug}` },
       { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Recallly', item: SITE_URL },
+        { '@type': 'ListItem', position: 1, name: 'Find Again', item: SITE_URL },
         { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
         { '@type': 'ListItem', position: 3, name: article.title, item: `${SITE_URL}/blog/${article.slug}` },
       ] },
     ];
     if (article.faq?.length) schemas.push({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: article.faq.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) });
-    return { title: `${article.seoTitle || article.title} | Recallly`, description: article.description, canonicalPath: `/blog/${article.slug}`, robots: 'index,follow', ogType: 'article', schemas };
+    return { title: `${article.seoTitle || article.title} | Find Again`, description: article.description, canonicalPath: `/blog/${article.slug}`, robots: 'index,follow', ogType: 'article', schemas };
   }
-  if (route === 'terms') return { title: 'Terms of Service | Recallly', description: 'Terms of Service for Recallly, an X bookmark organization and personal knowledge service.', canonicalPath: '/terms', robots: 'index,follow', schemas: [webPage('Recallly Terms of Service', 'Terms governing use of Recallly.', '/terms')] };
-  if (route === 'privacy') return { title: 'Privacy Policy | Recallly', description: 'Privacy Policy for Recallly, covering account, X bookmark, AI enrichment, billing, and service data.', canonicalPath: '/privacy', robots: 'index,follow', schemas: [webPage('Recallly Privacy Policy', 'How Recallly handles account, bookmark, AI, billing, and service data.', '/privacy')] };
-  if (route === 'demo' || route === 'demo-bookmark') return { title: route === 'demo' ? 'Interactive Demo | Recallly' : 'Demo Bookmark Reader | Recallly', description: 'Explore Recallly using static demo data without connecting an account.', robots: 'noindex,follow' };
-  if (route === 'not-found') return { title: 'Page Not Found | Recallly', description: 'The requested Recallly page is not available.', robots: 'noindex,follow' };
-  if (['login', 'signup', 'forgot-password', 'reset-password', 'auth-callback', 'onboarding'].includes(route)) return { title: `${route === 'signup' ? 'Create Account' : route === 'login' ? 'Sign In' : 'Account'} | Recallly`, description: 'Recallly account access.', robots: 'noindex,nofollow' };
-  return { title: 'Recallly Application', description: 'Your private Recallly bookmark library.', robots: 'noindex,nofollow' };
+  if (route === 'terms') return { title: 'Terms of Service | Find Again', description: 'Terms of Service for Find Again, an X bookmark organization and personal knowledge service.', canonicalPath: '/terms', robots: 'index,follow', schemas: [webPage('Find Again Terms of Service', 'Terms governing use of Find Again.', '/terms')] };
+  if (route === 'privacy') return { title: 'Privacy Policy | Find Again', description: 'Privacy Policy for Find Again, covering account, X bookmark, AI enrichment, billing, and service data.', canonicalPath: '/privacy', robots: 'index,follow', schemas: [webPage('Find Again Privacy Policy', 'How Find Again handles account, bookmark, AI, billing, and service data.', '/privacy')] };
+  if (route === 'demo' || route === 'demo-bookmark') return { title: route === 'demo' ? 'Interactive Demo | Find Again' : 'Demo Bookmark Reader | Find Again', description: 'Explore Find Again using static demo data without connecting an account.', robots: 'noindex,follow' };
+  if (route === 'not-found') return { title: 'Page Not Found | Find Again', description: 'The requested Find Again page is not available.', robots: 'noindex,follow' };
+  if (['login', 'signup', 'forgot-password', 'reset-password', 'auth-callback', 'onboarding'].includes(route)) return { title: `${route === 'signup' ? 'Create Account' : route === 'login' ? 'Sign In' : 'Account'} | Find Again`, description: 'Find Again account access.', robots: 'noindex,nofollow' };
+  return { title: 'Find Again Application', description: 'Your private Find Again bookmark library.', robots: 'noindex,nofollow' };
 }
 
 function ensureMeta(selector: string, attributes: Record<string, string>) {

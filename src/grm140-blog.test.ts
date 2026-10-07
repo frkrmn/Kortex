@@ -17,7 +17,7 @@ test('blog routes are public and article slugs resolve', () => {
 
 test('blog content has a small, maintainable initial set with complete metadata', () => {
   const articleCount = (content.match(/slug: '/g) || []).length;
-  assert.equal(articleCount, 3);
+  assert.equal(articleCount, 6);
   for (const field of ['description:', 'author:', 'publishedAt:', 'readingTime:', 'category:', 'relatedSlugs:']) {
     assert.match(content, new RegExp(field));
   }
@@ -25,7 +25,7 @@ test('blog content has a small, maintainable initial set with complete metadata'
   assert.match(seo, /BreadcrumbList/);
   assert.match(seo, /canonicalPath: `\/blog\/\$\{article\.slug\}`/);
   assert.match(blogView, /Related articles/);
-  assert.match(blogView, /Explore the demo/);
+  assert.match(blogView, /Start using Find Again/);
 });
 
 test('public sitemap includes the blog index and every initial article', () => {

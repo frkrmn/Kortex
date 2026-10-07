@@ -79,5 +79,5 @@ test('customer-facing retained production surfaces use Find Again branding', () 
 
 test('disabled Google OAuth is not presented as an available production action', () => {
   const authViews = read('./views/LoginView.tsx') + read('./views/SignupView.tsx');
-  assert.doesNotMatch(authViews, /Continue with Google|handleGoogleSignIn|signInWithGoogle/);
+  assert.doesNotMatch(authViews, /Continue with Google|handleGoogleSignIn|signInWithGoogle|converse with everything/);
 });

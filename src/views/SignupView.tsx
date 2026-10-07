@@ -169,7 +169,7 @@ export const SignupView: React.FC = () => {
               Build a better memory for the internet.
             </h1>
             <p className="text-xs sm:text-sm text-[#70706B] mt-1.5 leading-relaxed">
-              Organize, search, and converse with everything you bookmark.
+              Organize, search, and revisit everything you bookmark.
             </p>
           </div>
 

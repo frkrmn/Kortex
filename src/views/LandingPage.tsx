@@ -82,7 +82,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </h1>
 
         <p className="mt-5 text-[17px] sm:text-lg text-[#5C5C58] max-w-2xl mx-auto leading-7">
-          Turn your chaotic X bookmarks into an organized, searchable, conversational knowledge library. Automatically categorized, summarized, and synthesized.
+          Turn your chaotic X bookmarks into an organized, searchable personal knowledge library. Automatically categorized, summarized, and synthesized.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -113,7 +113,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="w-2.5 h-2.5 rounded-full bg-[#E5E5E0]"></div>
               <div className="w-2.5 h-2.5 rounded-full bg-[#E5E5E0]"></div>
               <div className="w-2.5 h-2.5 rounded-full bg-[#E5E5E0]"></div>
-              <span className="text-[11px] text-[#8A8A85] ml-2 font-mono">recallly.app/bookmarks</span>
+              <span className="text-[11px] text-[#8A8A85] ml-2 font-mono">Find Again · Bookmarks</span>
             </div>
             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
               Live Index (2,847 items)

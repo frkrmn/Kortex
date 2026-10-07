@@ -84,6 +84,6 @@ test('disabled Google OAuth is not presented as an available production action',
 
 test('public entry points do not advertise hidden authenticated features', () => {
   const publicViews = read('./views/LandingPage.tsx') + read('./views/PublicCollectionView.tsx');
-  assert.doesNotMatch(publicViews, /Ask your bookmarks|weekly digests/i);
+  assert.doesNotMatch(publicViews, /Ask your bookmarks|weekly digests|conversational knowledge|Recallly|recallly\.app|KortexMarks/i);
   assert.match(publicViews, /Search your bookmarks/);
 });

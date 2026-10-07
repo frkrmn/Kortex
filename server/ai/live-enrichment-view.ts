@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Bookmark } from '../../src/types';
 import { GEMINI_PROMPT_VERSION, GEMINI_SCHEMA_VERSION } from './gemini-v1';
+import { normalizeTopics } from '../../src/lib/topic-normalization';
 
 type EnrichmentRow = {
   saved_item_id: string; status: Bookmark['enrichment_status']; summary: string | null;
@@ -29,7 +30,7 @@ export async function attachLiveEnrichments(db: SupabaseClient, userId: string, 
       enrichment_status: row.status,
       ai_summary: available && row.status === 'completed' ? row.summary || '' : '',
       ai_category: available && row.status === 'completed' ? row.category || undefined : undefined,
-      topics: available && row.status === 'completed' ? row.topics || [] : [],
+      topics: available && row.status === 'completed' ? normalizeTopics(row.topics || []) : [],
       key_concepts: available && row.status === 'completed' ? row.key_concepts || [] : undefined,
       enrichment_model: row.model,
       enriched_at: row.enriched_at || undefined,

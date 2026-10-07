@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ENRICHMENT_CATEGORIES } from '../../src/config/enrichment';
 import { publicXImageUrls } from './x-media-urls';
+import { normalizeTopics } from '../../src/lib/topic-normalization';
 
 export const GEMINI_ENRICHMENT_MODEL = 'gemini-3.5-flash-lite';
 export const GEMINI_PROMPT_VERSION = 'v1';
@@ -16,7 +17,8 @@ export const geminiEnrichmentSchema = z.object({
 }).strict();
 
 export function parseGeminiEnrichment(value: string) {
-  return geminiEnrichmentSchema.parse(JSON.parse(value));
+  const parsed = geminiEnrichmentSchema.parse(JSON.parse(value));
+  return { ...parsed, topics: normalizeTopics(parsed.topics) };
 }
 
 export function geminiInputParts(item: { content: string; media: unknown }) {

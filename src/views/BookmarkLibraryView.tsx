@@ -16,7 +16,7 @@ import { BookmarkCard } from '../components/BookmarkCard';
 import { Bookmark } from '../types';
 import { api } from '../lib/api';
 import { ENRICHMENT_CATEGORIES } from '../config/enrichment';
-import { categoryCounts, filterEnrichedBookmarks, isEnrichmentCategory, topicCounts } from '../lib/enrichment-filters';
+import { categoryCounts, filterEnrichedBookmarks, isEnrichmentCategory, topicCounts, visibleTopicOptions } from '../lib/enrichment-filters';
 
 export const BookmarkLibraryView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
@@ -50,11 +50,18 @@ export const BookmarkLibraryView: React.FC = () => {
     latencyMs: number;
   } | null>(null);
   const [isSearchingHybrid, setIsSearchingHybrid] = useState(false);
+  const [topicSearch, setTopicSearch] = useState('');
+  const [showAllTopics, setShowAllTopics] = useState(false);
 
   // Sync search query changes to URL debounce
   useEffect(() => {
     setSearchQuery(urlSearch);
   }, [urlSearch]);
+
+  useEffect(() => {
+    setTopicSearch('');
+    setShowAllTopics(false);
+  }, [urlCategory]);
 
   // Hybrid search execution
   useEffect(() => {
@@ -123,6 +130,15 @@ export const BookmarkLibraryView: React.FC = () => {
   const selectedCategory = isEnrichmentCategory(urlCategory) ? urlCategory : null;
   const counts = categoryCounts(bookmarks);
   const availableTopics = selectedCategory ? topicCounts(bookmarks, selectedCategory) : [];
+  const visibleTopics = visibleTopicOptions(availableTopics, topicSearch, urlTopic, showAllTopics);
+  const hasActiveFilters = Boolean(searchQuery.trim()) || urlCategory !== 'all' || urlTopic !== 'all' || urlFilter !== 'all' || urlSort !== 'newest';
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setTopicSearch('');
+    setShowAllTopics(false);
+    navigate('/bookmarks');
+  };
 
   const pendingCount = bookmarks.filter(
     (b) => !b.ai_summary || b.enrichment_status === 'pending' || b.enrichment_status === 'failed'
@@ -291,9 +307,21 @@ export const BookmarkLibraryView: React.FC = () => {
           </div>
         </div>
 
-        {/* Horizontally Scrollable Topic Chips */}
-        {selectedCategory && <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Topics">
-          {[['all', counts[selectedCategory]] as const, ...availableTopics].map(([topic, count]) => {
+        {selectedCategory && availableTopics.length > 0 && <div className="space-y-2 rounded-xl border border-[#E8E8E5] bg-white p-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8A8A85]" />
+              <input value={topicSearch} onChange={(event) => setTopicSearch(event.target.value)}
+                aria-label={`Search ${selectedCategory} topics`} placeholder="Find a topic"
+                className="w-full rounded-lg border border-[#E8E8E5] bg-[#FAFAF8] py-1.5 pl-8 pr-3 text-xs outline-none focus:border-[#2563EB]" />
+            </div>
+            {!topicSearch && availableTopics.length > 12 && <button type="button" onClick={() => setShowAllTopics(value => !value)}
+              className="self-start text-xs font-medium text-[#2563EB] hover:text-[#1D4ED8] sm:self-auto">
+              {showAllTopics ? 'Show fewer topics' : `Show all topics (${availableTopics.length})`}
+            </button>}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Topics">
+          {[['all', counts[selectedCategory]] as const, ...visibleTopics].map(([topic, count]) => {
             const isSelected =
               topic === 'all'
                 ? urlTopic === 'all'
@@ -312,6 +340,12 @@ export const BookmarkLibraryView: React.FC = () => {
               </button>
             );
           })}
+          </div>
+          {topicSearch && visibleTopics.length === 0 && <p className="px-1 text-xs text-[#8A8A85]">No topics match “{topicSearch.trim()}”.</p>}
+        </div>}
+
+        {hasActiveFilters && <div className="flex justify-end">
+          <button type="button" onClick={clearAllFilters} className="text-xs font-medium text-[#2563EB] hover:text-[#1D4ED8]">Clear all filters</button>
         </div>}
       </div>
 

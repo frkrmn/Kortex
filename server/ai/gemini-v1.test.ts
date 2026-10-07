@@ -28,6 +28,16 @@ test('provider schema limits arrays to the local validator contract', () => {
   assert.throws(() => parseGeminiEnrichment(JSON.stringify({ ...valid, key_concepts: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] })));
 });
 
+test('provider output is normalized deterministically before persistence', () => {
+  const parsed = parseGeminiEnrichment(JSON.stringify({
+    summary: 'Useful context.', category: 'AI',
+    topics: ['Artificial Intelligence', 'AI', 'Open-source software', 'Machine Learning'],
+    key_concepts: ['MCP'],
+  }));
+  assert.deepEqual(parsed.topics, ['AI', 'Open Source', 'Machine Learning']);
+  assert.deepEqual(parsed.key_concepts, ['MCP']);
+});
+
 test('controlled rollout fails closed for absent config and any other user', () => {
   assert.equal(isControlledEnrichmentOwner(owner, {}), false);
   assert.equal(isControlledEnrichmentOwner(owner, { ...enabled, GEMINI_ENRICHMENT_ROLLOUT_CAP: '0' }), false);

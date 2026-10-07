@@ -1,68 +1,6 @@
 import { TopicSuggestion } from './types';
 import { aiConfig } from '../../src/config/ai';
-
-// Common canonical alias mappings to prevent topic proliferation
-const CANONICAL_TOPIC_MAP: Record<string, string> = {
-  // AI
-  'ai': 'AI & LLMs',
-  'artificial intelligence': 'AI & LLMs',
-  'machine learning': 'AI & LLMs',
-  'deep learning': 'AI & LLMs',
-  'llm': 'AI & LLMs',
-  'llms': 'AI & LLMs',
-  'genai': 'AI & LLMs',
-  'generative ai': 'AI & LLMs',
-  'agents': 'AI & LLMs',
-  'ai agents': 'AI & LLMs',
-
-  // Startups
-  'startup': 'Startups & Venture',
-  'startups': 'Startups & Venture',
-  'vc': 'Startups & Venture',
-  'venture capital': 'Startups & Venture',
-  'founders': 'Startups & Venture',
-  'fundraising': 'Startups & Venture',
-  'entrepreneurship': 'Startups & Venture',
-
-  // Product
-  'product': 'Product Strategy',
-  'product management': 'Product Strategy',
-  'pm': 'Product Strategy',
-  'product design': 'Product Strategy',
-  'product strategy': 'Product Strategy',
-
-  // Engineering
-  'engineering': 'Engineering & Systems',
-  'software engineering': 'Engineering & Systems',
-  'systems': 'Engineering & Systems',
-  'architecture': 'Engineering & Systems',
-  'software architecture': 'Engineering & Systems',
-  'distributed systems': 'Engineering & Systems',
-  'backend': 'Engineering & Systems',
-  'database': 'Engineering & Systems',
-  'devops': 'Engineering & Systems',
-
-  // Design
-  'design': 'Design & UI',
-  'ui': 'Design & UI',
-  'ux': 'Design & UI',
-  'ui/ux': 'Design & UI',
-  'interface': 'Design & UI',
-  'typography': 'Design & UI',
-
-  // Crypto
-  'crypto': 'Crypto & Web3',
-  'cryptocurrency': 'Crypto & Web3',
-  'web3': 'Crypto & Web3',
-  'bitcoin': 'Crypto & Web3',
-  'ethereum': 'Crypto & Web3',
-
-  // Growth & Marketing
-  'growth': 'Growth & Distribution',
-  'marketing': 'Growth & Distribution',
-  'distribution': 'Growth & Distribution',
-  'seo': 'Growth & Distribution',
-};
+import { normalizeTopic } from '../../src/lib/topic-normalization';
 
 export function slugifyTopic(name: string): string {
   return name
@@ -77,38 +15,7 @@ export function slugifyTopic(name: string): string {
  * Normalizes a raw topic string into a clean, canonical format.
  */
 export function normalizeTopicName(raw: string): string {
-  if (!raw) return '';
-
-  // Clean characters, trailing punctuation, hashes
-  let cleaned = raw
-    .trim()
-    .replace(/^[#@\s]+/, '')
-    .replace(/[.,;:]+$/, '')
-    .trim();
-
-  if (!cleaned) return '';
-
-  const lower = cleaned.toLowerCase();
-
-  // Check canonical map
-  if (CANONICAL_TOPIC_MAP[lower]) {
-    return CANONICAL_TOPIC_MAP[lower];
-  }
-
-  // Preserve proper capitalization for known acronyms
-  const acronyms = new Set(['AI', 'LLM', 'LLMs', 'UI', 'UX', 'API', 'APIs', 'SaaS', 'VC', 'SEO', 'CSS', 'SQL', 'B2B', 'PLG']);
-  const words = cleaned.split(/\s+/);
-  const normalizedWords = words.map(word => {
-    const upper = word.toUpperCase();
-    if (acronyms.has(upper)) return upper;
-    if (word.length <= 2 && !['in', 'on', 'at', 'to', 'of', 'by', 'as'].includes(word.toLowerCase())) {
-      return upper;
-    }
-    // Title case
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  });
-
-  return normalizedWords.join(' ');
+  return normalizeTopic(raw.replace(/^[#@\s]+/, ''));
 }
 
 /**

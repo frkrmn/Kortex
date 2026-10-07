@@ -81,3 +81,9 @@ test('disabled Google OAuth is not presented as an available production action',
   const authViews = read('./views/LoginView.tsx') + read('./views/SignupView.tsx');
   assert.doesNotMatch(authViews, /Continue with Google|handleGoogleSignIn|signInWithGoogle|converse with everything/);
 });
+
+test('public entry points do not advertise hidden authenticated features', () => {
+  const publicViews = read('./views/LandingPage.tsx') + read('./views/PublicCollectionView.tsx');
+  assert.doesNotMatch(publicViews, /Ask your bookmarks|weekly digests/i);
+  assert.match(publicViews, /Search your bookmarks/);
+});

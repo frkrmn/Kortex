@@ -143,7 +143,7 @@ export const PublicCollectionView: React.FC<PublicCollectionViewProps> = ({
             Build your own personal knowledge library
           </h2>
           <p className="text-xs text-[#A0A09A] max-w-md mx-auto leading-relaxed">
-            Turn your saved X bookmarks into an organized, searchable intelligence database with AI summarization and weekly digests.
+            Turn your saved X bookmarks into an organized, searchable library with AI summaries, categories, and topics.
           </p>
           <button
             onClick={onStartOwnLibrary}

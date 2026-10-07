@@ -155,7 +155,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="p-3 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-between text-[13px] leading-5 text-purple-900">
                 <div className="flex items-center gap-2">
                   <MessageSquareText className="w-4 h-4 text-purple-600" />
-                  <span className="font-medium">Ask your bookmarks: "What did I save about prompt caching?"</span>
+                  <span className="font-medium">Search your bookmarks: "What did I save about prompt caching?"</span>
                 </div>
                 <span className="text-[10px] underline font-semibold">Try now →</span>
               </div>

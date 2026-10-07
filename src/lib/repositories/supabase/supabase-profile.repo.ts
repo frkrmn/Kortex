@@ -9,7 +9,7 @@ export class SupabaseProfileRepository implements IProfileRepository {
     const fallback: UserProfile = {
       id: '00000000-0000-0000-0000-000000000001',
       user_id: '00000000-0000-0000-0000-000000000001',
-      display_name: 'Recallly Member',
+      display_name: 'Find Again Member',
       email: 'user@example.com',
       avatar_url: '',
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -114,4 +114,3 @@ export class SupabaseProfileRepository implements IProfileRepository {
     }
   }
 }
-

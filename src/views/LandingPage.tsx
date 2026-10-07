@@ -37,11 +37,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 bg-[#FAFAF8]/90 backdrop-blur-md border-b border-[#E8E8E5]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <button type="button" className="flex items-center gap-2.5 cursor-pointer" onClick={onGoHome} aria-label="Recallly home">
+          <button type="button" className="flex items-center gap-2.5 cursor-pointer" onClick={onGoHome} aria-label="Find Again home">
             <div className="w-8 h-8 rounded-xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
               <Layers className="w-4 h-4" />
             </div>
-            <span className="font-bold text-base tracking-tight">Recallly</span>
+            <span className="font-bold text-base tracking-tight">Find Again</span>
           </button>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-[#5C5C58]">
@@ -221,7 +221,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="font-semibold text-base text-[#171717]">Connect in 30 Seconds</h3>
             <p className="text-base text-[#5C5C58] leading-7">
-              Connect through read-only OAuth, import the recent bookmarks X makes available, and keep new bookmarks syncing with Pro.
+              Connect through read-only OAuth, import the bookmarks X makes available, and run manual sync whenever you need it.
             </p>
           </div>
 
@@ -231,7 +231,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="font-semibold text-base text-[#171717]">AI Organizes & Indexes</h3>
             <p className="text-base text-[#5C5C58] leading-7">
-              Recallly can add topic tags, concise takeaways, and semantic indexing according to your plan.
+              Find Again can add concise summaries, categories, topics, and key concepts to eligible saved posts.
             </p>
           </div>
 
@@ -278,7 +278,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <ExternalLink className="w-5 h-5 text-purple-600" />
               <h3 className="font-semibold text-base text-[#171717]">Rich Bookmark Reader</h3>
               <p className="text-base text-[#5C5C58] leading-7">
-                Read stored post text and available media in Recallly while keeping the original X source one click away.
+                Read stored post text and available media in Find Again while keeping the original X source one click away.
               </p>
             </div>
 
@@ -337,7 +337,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#70706B] shrink-0" />
-                  <span>Create collections and try Recallly AI</span>
+                  <span>Create collections and use AI enrichment</span>
                 </div>
               </div>
             </div>
@@ -360,7 +360,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="space-y-4">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-[#171717]">Recallly Pro</h3>
+                  <h3 className="text-lg font-bold text-[#171717]">Find Again Pro</h3>
                   <p className="text-sm leading-5 text-[#5C5C58]">Review current Pro access in checkout</p>
                 </div>
                 <div className="text-right">
@@ -411,7 +411,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           Powered by Stripe • No commitment • Downgrading never deletes your bookmarks or summaries
         </p>
         <p className="text-sm leading-6 text-center text-[#5C5C58] max-w-2xl mx-auto">
-          {X_HISTORY_EXPLANATION} Once connected, ongoing sync lets your Recallly library continue growing.
+          {X_HISTORY_EXPLANATION} Once connected, manual sync—and automatic sync where eligible and enabled—can keep your library growing.
         </p>
       </section>
 
@@ -457,7 +457,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="w-6 h-6 rounded-lg bg-[#171717] text-white flex items-center justify-center font-bold text-xs">
               <Layers className="w-3.5 h-3.5" />
             </div>
-            <span className="font-semibold text-[#171717]">Recallly</span>
+            <span className="font-semibold text-[#171717]">Find Again</span>
             <span>•</span>
             <span>Saving something should be the beginning of its usefulness.</span>
           </div>

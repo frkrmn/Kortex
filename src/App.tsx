@@ -13,10 +13,6 @@ import { BookmarkLibraryView } from './views/BookmarkLibraryView';
 import { BookmarkDetailView } from './views/BookmarkDetailView';
 import { CollectionsView } from './views/CollectionsView';
 import { CollectionDetailView } from './views/CollectionDetailView';
-import { AskAIView } from './views/AskAIView';
-import { InsightsView } from './views/InsightsView';
-import { DigestsView } from './views/DigestsView';
-import { DigestDetailView } from './views/DigestDetailView';
 import { SettingsView } from './views/SettingsView';
 import { LandingPage } from './views/LandingPage';
 import { PublicDemoView } from './views/PublicDemoView';
@@ -32,7 +28,7 @@ import { FaqView, HowItWorksView, PricingView } from './views/MarketingViews';
 import { NotFoundView } from './views/NotFoundView';
 
 const AuthenticatedApplication: React.FC = () => {
-  const { route } = useRouter();
+  const { route, navigate } = useRouter();
   const { createCollection } = useDemoStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
@@ -48,6 +44,12 @@ const AuthenticatedApplication: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (['ask', 'insights', 'digests', 'digest-detail'].includes(route)) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate, route]);
+
   return (
     <div id="recallly-app-root" className="min-h-screen bg-[#FAFAF8] text-[#171717] flex flex-col md:flex-row">
       <AppSidebar onOpenSearch={() => setIsSearchOpen(true)} />
@@ -59,10 +61,6 @@ const AuthenticatedApplication: React.FC = () => {
         {route === 'bookmark-detail' && <BookmarkDetailView />}
         {route === 'collections' && <CollectionsView onOpenCreateCollection={() => setIsCreateCollectionOpen(true)} />}
         {route === 'collection-detail' && <CollectionDetailView />}
-        {route === 'ask' && <AskAIView />}
-        {route === 'insights' && <InsightsView />}
-        {route === 'digests' && <DigestsView />}
-        {route === 'digest-detail' && <DigestDetailView />}
         {route === 'settings' && <SettingsView />}
       </main>
 
@@ -71,7 +69,7 @@ const AuthenticatedApplication: React.FC = () => {
         isOpen={isCreateCollectionOpen}
         onClose={() => setIsCreateCollectionOpen(false)}
         onSave={async (name, description, visibility) => {
-          createCollection(name, description, visibility);
+          await createCollection(name, description, visibility);
         }}
       />
       <Toast />

@@ -347,7 +347,7 @@ export class DigestService {
 
     const dominantNames = topTopics.slice(0, 3).map(t => t.topic).join(', ');
 
-    const prompt = `You are Recallly's Personal Knowledge Intelligence engine.
+    const prompt = `You are Find Again's Personal Knowledge Intelligence engine.
 Generate a high-value weekly synthesis for the period "${periodLabel}".
 
 PRIMARY RULES:

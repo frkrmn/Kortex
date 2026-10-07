@@ -66,7 +66,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
         });
       } catch (error) {
         console.error('X sync preflight/import failed:', error);
-        res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Recallly library is still available.' });
+        res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Find Again library is still available.' });
         return;
       }
       if (result.success) {
@@ -394,7 +394,10 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
     if (route === '/collections' && method === 'GET') {
       const { data, error } = await db.from('collections').select('*').eq('user_id', user.id);
       if (error) throw error;
-      const { data: links, error: linksError } = await db.from('collection_items').select('collection_id, saved_item_id');
+      const collectionIds = (data || []).map(row => row.id);
+      const { data: links, error: linksError } = collectionIds.length
+        ? await db.from('collection_items').select('collection_id, saved_item_id').in('collection_id', collectionIds)
+        : { data: [], error: null };
       if (linksError) throw linksError;
       res.json(data.map(row => mapCollectionRowToCollection(row,
         (links || []).filter(link => link.collection_id === row.id).map(link => link.saved_item_id))));
@@ -460,7 +463,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
     if (collectionSlug && method === 'GET') {
       const { data: col, error } = await db.from('collections').select('*').eq('slug', collectionSlug).maybeSingle();
       if (error) throw error;
-      if (!col) { res.status(404).json({ error: 'Collection not found.' }); return; }
+      if (!col || (col.user_id !== user.id && col.visibility !== 'public')) { res.status(404).json({ error: 'Collection not found.' }); return; }
       const { data: links, error: linksError } = await db.from('collection_items').select('saved_item_id').eq('collection_id', col.id);
       if (linksError) throw linksError;
       const ids = (links || []).map(link => link.saved_item_id);
@@ -563,7 +566,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       const mappedProfile = profile.data ? mapProfileRowToProfile(profile.data, user.email) : null;
       if (mappedProfile) mappedProfile.plan = subscription.data?.plan === 'pro' ? 'pro' : subscription.data?.plan === 'free_trial' ? 'free_trial' : 'starter';
       res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Content-Disposition', 'attachment; filename=recallly-data-export.json');
+      res.setHeader('Content-Disposition', 'attachment; filename=find-again-data-export.json');
       res.json({
         profile: mappedProfile,
         subscription: subscription.data || { plan: 'free', status: 'active' },

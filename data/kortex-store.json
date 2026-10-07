@@ -305,7 +305,7 @@
         "Retention",
         "PLG"
       ],
-      "why_saved_insight": "Checklist for refining the Kortex onboarding flow: minimal forms, immediate bookmark processing, zero dead ends.",
+      "why_saved_insight": "Checklist for refining the Find Again onboarding flow: minimal forms, immediate bookmark processing, zero dead ends.",
       "collection_ids": [],
       "engagement": {
         "likes": 11200,
@@ -10801,7 +10801,7 @@
       "digestId": "dig_week_current",
       "type": "weekly_digest",
       "recipientEmail": "farukerman@gmail.com",
-      "subject": "Your week in Recallly: 42 ideas captured",
+      "subject": "Your week in Find Again: 42 ideas captured",
       "provider": "resend",
       "status": "sent",
       "attempts": 1,

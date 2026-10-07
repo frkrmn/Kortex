@@ -17,13 +17,15 @@ import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { XBookmarkReader } from '../components/XBookmarkReader';
-import { api } from '../lib/api';
-import { Bookmark } from '../types';
 
 export const BookmarkDetailView: React.FC = () => {
   const { params, navigate } = useRouter();
   const {
     dataMode,
+    bookmarksLoadState,
+    collectionsLoadState,
+    reloadCollections,
+    reloadBookmarks,
     getBookmark,
     getRelatedBookmarks,
     collections,
@@ -36,27 +38,10 @@ export const BookmarkDetailView: React.FC = () => {
   } = useDemoStore();
 
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
-  const [vectorRelated, setVectorRelated] = useState<{ bookmark: Bookmark; similarity: number }[]>([]);
-
   const bookmark = getBookmark(params.id);
 
-  React.useEffect(() => {
-    if (!bookmark) return;
-
-    let isSubscribed = true;
-    api.getRelatedBookmarks(bookmark.id, 3)
-      .then((items) => {
-        if (isSubscribed && items && items.length > 0) {
-          setVectorRelated(items);
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not fetch vector-related bookmarks:', err);
-      });
-    return () => {
-      isSubscribed = false;
-    };
-  }, [bookmark?.id]);
+  if (bookmarksLoadState === 'loading') return <div className="py-20 text-center text-sm text-[#70706B]" role="status">Loading bookmark…</div>;
+  if (bookmarksLoadState === 'error') return <div className="mx-auto max-w-lg space-y-3 py-20 text-center"><h2 className="text-xl font-bold text-[#171717]">Bookmark could not be loaded</h2><p className="text-sm text-[#70706B]">The library request failed. The bookmark may still exist.</p><button type="button" onClick={() => void reloadBookmarks()} className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-semibold text-white">Try again</button></div>;
 
   if (!bookmark) {
     return (
@@ -75,11 +60,7 @@ export const BookmarkDetailView: React.FC = () => {
     );
   }
 
-  const fallbackRelated = getRelatedBookmarks(bookmark.id, 3);
-
-  const relatedBookmarks = vectorRelated.length > 0
-    ? vectorRelated.map(r => ({ ...r.bookmark, _similarity: r.similarity }))
-    : fallbackRelated.map(b => ({ ...b, _similarity: undefined }));
+  const relatedBookmarks = getRelatedBookmarks(bookmark.id, 3);
 
   const formattedImportDate = new Date(bookmark.imported_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -125,15 +106,6 @@ export const BookmarkDetailView: React.FC = () => {
             <span>{bookmark.is_favorite ? 'Favorited' : 'Favorite'}</span>
           </button>
 
-          <button
-            onClick={() => navigate(`/ask?bookmarkId=${bookmark.id}`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EEF4FF] border border-[#DBEAFE] hover:bg-[#DBEAFE] text-xs font-semibold text-[#2563EB] transition-colors cursor-pointer"
-            title="Ask conversational AI questions scoped to this bookmark"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-            <span>Ask AI</span>
-          </button>
-
           <a
             href={bookmark.url}
             target="_blank"
@@ -144,18 +116,17 @@ export const BookmarkDetailView: React.FC = () => {
             <ExternalLink className="w-3.5 h-3.5 text-[#8A8A85]" />
           </a>
 
-          <button
+          {dataMode === 'demo' && <button
             onClick={() => {
               if (window.confirm('Delete this bookmark from your library?')) {
-                deleteBookmark(bookmark.id);
-                navigate('/bookmarks');
+                void deleteBookmark(bookmark.id).then(() => navigate('/bookmarks'));
               }
             }}
-            title="Delete from Recallly"
+            title="Delete from Find Again"
             className="p-2 text-[#8A8A85] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -166,7 +137,7 @@ export const BookmarkDetailView: React.FC = () => {
           <XBookmarkReader bookmark={bookmark} />
         </div>
 
-        {/* Side Column: Recallly Intelligence */}
+        {/* Side Column: Find Again enrichment */}
         <div className="space-y-5">
           {/* AI Summary Card */}
           <div className="p-5 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-3">
@@ -313,9 +284,10 @@ export const BookmarkDetailView: React.FC = () => {
                 </span>
                 <button
                   onClick={() => setShowCollectionPicker(!showCollectionPicker)}
+                  disabled={collectionsLoadState !== 'ready'}
                   className="text-xs text-[#2563EB] hover:underline font-medium"
                 >
-                  Manage
+                  {collectionsLoadState === 'error' ? 'Unavailable' : 'Manage'}
                 </button>
               </div>
 
@@ -350,12 +322,13 @@ export const BookmarkDetailView: React.FC = () => {
                   })}
                 </div>
               )}
+              {collectionsLoadState === 'error' && <button type="button" onClick={() => void reloadCollections()} className="text-xs font-medium text-rose-700">Collections could not be loaded · Try again</button>}
             </div>
 
             {/* Metadata Timestamps */}
             <div className="pt-3 border-t border-[#F0F0EC] text-[11px] text-[#8A8A85] space-y-1">
               <div className="flex items-center justify-between">
-                <span>Imported to Recallly</span>
+                <span>Imported to Find Again</span>
                 <span>{formattedImportDate}</span>
               </div>
             </div>
@@ -371,7 +344,7 @@ export const BookmarkDetailView: React.FC = () => {
               Similar things you've saved
             </h2>
             <p className="text-xs text-[#8A8A85]">
-              Connected by topics, keywords, and conceptual overlap
+              Related by shared saved topics
             </p>
           </div>
 
@@ -400,9 +373,7 @@ export const BookmarkDetailView: React.FC = () => {
 
                 <div className="pt-3 mt-3 border-t border-[#F0F0EC] flex items-center justify-between text-[11px] text-[#8A8A85]">
                   <span>
-                    {(rel as any)._similarity !== undefined
-                      ? `${Math.round((rel as any)._similarity * 100)}% match`
-                      : rel.topics?.[0] || 'Saved'}
+                    {rel.topics?.find((topic) => bookmark.topics?.includes(topic)) || rel.topics?.[0] || 'Saved'}
                   </span>
                   <span className="text-[#2563EB] font-medium">View →</span>
                 </div>

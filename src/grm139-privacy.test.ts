@@ -6,7 +6,7 @@ const legal = fs.readFileSync(new URL('./views/LegalViews.tsx', import.meta.url)
 const privacy = legal.split('export const PrivacyView')[1];
 const seo = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 
-test('Privacy Policy reflects implemented Recallly data flows', () => {
+test('Privacy Policy reflects implemented Find Again data flows', () => {
   for (const heading of [
     'Account and authentication information',
     'X-connected information',
@@ -19,7 +19,7 @@ test('Privacy Policy reflects implemented Recallly data flows', () => {
     'Export, deletion, and controls',
     'Privacy choices and rights',
   ]) assert.match(privacy, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(seo, /Privacy Policy \| Recallly/);
+  assert.match(seo, /Privacy Policy \| Find Again/);
   assert.match(seo, /canonicalPath: '\/privacy'/);
   assert.match(privacy, /href="\/terms"/);
   assert.doesNotMatch(privacy, /PostHog|Google Analytics|Sentry/);

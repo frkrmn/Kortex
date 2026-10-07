@@ -68,7 +68,7 @@ export const api = {
     instructions?: string;
   }> {
     const res = await apiFetch('/api/integrations/x/auth-url');
-    if (res.status === 401) throw new Error('Sign in to Recallly before connecting X.');
+    if (res.status === 401) throw new Error('Sign in to Find Again before connecting X.');
     if (!res.ok) {
       const details = await res.json().catch(() => null);
       throw new Error(details?.error || 'Could not start X connection. Please try again.');
@@ -397,7 +397,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'RAG query failed' }));
-      throw new Error(err.error || 'Failed to ask Recallly');
+      throw new Error(err.error || 'The AI request failed');
     }
     return res.json();
   },

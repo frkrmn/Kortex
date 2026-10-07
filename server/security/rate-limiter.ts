@@ -72,7 +72,7 @@ export function createRateLimiter(config: RateLimitConfig) {
 export const askRateLimiter = createRateLimiter({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 30, // 30 asks per minute
-  message: 'Ask Recallly rate limit exceeded. Please wait a moment before sending more queries.',
+  message: 'Ask Find Again rate limit exceeded. Please wait a moment before sending more queries.',
 });
 
 export const searchRateLimiter = createRateLimiter({

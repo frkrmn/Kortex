@@ -7,14 +7,10 @@ import {
   Sparkles,
   X,
   Bookmark as BookmarkIcon,
-  RefreshCw,
-  Zap,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
-import { Bookmark } from '../types';
-import { api } from '../lib/api';
 import { ENRICHMENT_CATEGORIES } from '../config/enrichment';
 import { categoryCounts, filterEnrichedBookmarks, isEnrichmentCategory, topicCounts, visibleTopicOptions } from '../lib/enrichment-filters';
 
@@ -24,6 +20,9 @@ export const BookmarkLibraryView: React.FC = () => {
     dataMode,
     bookmarks,
     collections,
+    bookmarksLoadState,
+    collectionsLoadState,
+    reloadBookmarks,
     bookmarkViewMode,
     enrichmentStatus,
     setBookmarkViewMode,
@@ -43,13 +42,6 @@ export const BookmarkLibraryView: React.FC = () => {
   const urlSearch = searchParams.get('q') || '';
 
   const [searchQuery, setSearchQuery] = useState(urlSearch);
-  const [hybridResults, setHybridResults] = useState<{
-    results: { item: Bookmark; score: number; matchType: 'lexical' | 'semantic' | 'hybrid' }[];
-    total: number;
-    mode: 'hybrid' | 'lexical' | 'semantic';
-    latencyMs: number;
-  } | null>(null);
-  const [isSearchingHybrid, setIsSearchingHybrid] = useState(false);
   const [topicSearch, setTopicSearch] = useState('');
   const [showAllTopics, setShowAllTopics] = useState(false);
 
@@ -62,33 +54,6 @@ export const BookmarkLibraryView: React.FC = () => {
     setTopicSearch('');
     setShowAllTopics(false);
   }, [urlCategory]);
-
-  // Hybrid search execution
-  useEffect(() => {
-    const trimmed = searchQuery.trim();
-    if (!trimmed || urlCategory !== 'all' || urlTopic !== 'all') {
-      setHybridResults(null);
-      setIsSearchingHybrid(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsSearchingHybrid(true);
-      try {
-        const res = await api.searchHybrid(trimmed, {
-          topic: urlTopic !== 'all' ? urlTopic : undefined,
-          filter: urlFilter !== 'all' ? urlFilter : undefined,
-        });
-        setHybridResults(res);
-      } catch (err) {
-        console.warn('Hybrid search failed, falling back to local search:', err);
-      } finally {
-        setIsSearchingHybrid(false);
-      }
-    }, 180);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, urlCategory, urlTopic, urlFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,19 +78,7 @@ export const BookmarkLibraryView: React.FC = () => {
     sort: urlSort,
   });
 
-  const candidateBookmarks: Bookmark[] =
-    searchQuery.trim() && urlCategory === 'all' && urlTopic === 'all' && hybridResults
-      ? hybridResults.results.map((r) => r.item)
-      : localFiltered;
-  const displayedBookmarks = filterEnrichedBookmarks(candidateBookmarks, urlCategory, urlTopic, searchQuery);
-
-  // Match lookup
-  const matchMap = new Map<string, { matchType: 'lexical' | 'semantic' | 'hybrid'; score: number }>();
-  if (hybridResults) {
-    hybridResults.results.forEach((r) => {
-      matchMap.set(r.item.id, { matchType: r.matchType, score: r.score });
-    });
-  }
+  const displayedBookmarks = filterEnrichedBookmarks(localFiltered, urlCategory, urlTopic, searchQuery);
 
   const selectedCategory = isEnrichmentCategory(urlCategory) ? urlCategory : null;
   const counts = categoryCounts(bookmarks);
@@ -143,6 +96,14 @@ export const BookmarkLibraryView: React.FC = () => {
   const pendingCount = bookmarks.filter(
     (b) => !b.ai_summary || b.enrichment_status === 'pending' || b.enrichment_status === 'failed'
   ).length;
+
+  if (bookmarksLoadState === 'loading') {
+    return <div className="py-20 text-center text-sm text-[#70706B]" role="status">Loading your bookmarks…</div>;
+  }
+
+  if (bookmarksLoadState === 'error') {
+    return <div className="mx-auto max-w-lg space-y-3 py-20 text-center"><h1 className="text-xl font-bold text-[#171717]">Bookmarks could not be loaded</h1><p className="text-sm text-[#70706B]">This is a loading error, not an empty library.</p><button type="button" onClick={() => void reloadBookmarks()} className="rounded-xl bg-[#171717] px-4 py-2 text-xs font-semibold text-white">Try again</button></div>;
+  }
 
   return (
     <div id="bookmark-library-view" className="space-y-6 pb-20 max-w-5xl mx-auto">
@@ -217,6 +178,8 @@ export const BookmarkLibraryView: React.FC = () => {
         </div>
       )}
 
+      {collectionsLoadState === 'error' && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Collections could not be loaded. Bookmark search and reading still work; collection actions are unavailable.</div>}
+
       {/* Search Input */}
       <form onSubmit={handleSearchSubmit} className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A85]" />
@@ -227,7 +190,7 @@ export const BookmarkLibraryView: React.FC = () => {
             setSearchQuery(e.target.value);
             updateUrlParams({ q: e.target.value });
           }}
-          placeholder="Search your bookmarks across ideas, authors, or topics..."
+          placeholder="Search text, authors, summaries, categories, topics, or key concepts..."
           className="w-full pl-10 pr-10 py-2.5 bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D0D0CB] focus:border-[#2563EB] rounded-xl text-sm text-[#171717] placeholder:text-[#8A8A85] outline-none shadow-2xs transition-all"
         />
         {searchQuery && (
@@ -357,25 +320,7 @@ export const BookmarkLibraryView: React.FC = () => {
               {displayedBookmarks.length} result(s)
             </span>
             <span>for <span className="font-medium text-[#171717]">"{searchQuery.trim()}"</span></span>
-            {hybridResults && (
-              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <Zap className="w-3 h-3 text-emerald-600" />
-                <span>
-                  {hybridResults.mode === 'hybrid'
-                    ? 'Hybrid Search (Vector + BM25)'
-                    : hybridResults.mode === 'semantic'
-                    ? 'Semantic Vector Search'
-                    : 'Full-text Search'}
-                </span>
-                <span className="text-emerald-600">• {hybridResults.latencyMs}ms</span>
-              </span>
-            )}
-            {isSearchingHybrid && (
-              <span className="text-[11px] text-[#8A8A85] flex items-center gap-1 animate-pulse">
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                Refreshing vectors...
-              </span>
-            )}
+            <span className="text-[11px] text-[#8A8A85]">Keyword search</span>
           </div>
           <button
             type="button"
@@ -416,8 +361,8 @@ export const BookmarkLibraryView: React.FC = () => {
               onOpenDetail={(b) => navigate(`/bookmarks/${b.id}`)}
               onToggleRead={toggleRead}
               onToggleFavorite={toggleFavorite}
-              onToggleCollection={toggleBookmarkInCollection}
-              onDeleteBookmark={deleteBookmark}
+              onToggleCollection={collectionsLoadState === 'ready' ? toggleBookmarkInCollection : undefined}
+              onDeleteBookmark={dataMode === 'demo' ? deleteBookmark : undefined}
               onSelectTopic={(t) => updateUrlParams({ topic: t.toLowerCase() })}
             />
           ))}

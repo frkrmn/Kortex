@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, ArrowRight, CheckCircle2, Globe, Sparkles, Loader2, Info, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { Layers, ArrowRight, CheckCircle2, Globe, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
 import { useDemoStore } from '../lib/store/demo-store';
@@ -28,8 +28,6 @@ export const OnboardingView: React.FC = () => {
   // Step 3 X Integration State
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [showConfigHelper, setShowConfigHelper] = useState(false);
-  const [copiedCallback, setCopiedCallback] = useState(false);
   const [connectedXUser, setConnectedXUser] = useState<{
     username: string;
     displayName: string;
@@ -45,8 +43,7 @@ export const OnboardingView: React.FC = () => {
   const [historicalLimit, setHistoricalLimit] = useState<number | null>(null);
   const [historicalLimitReached, setHistoricalLimitReached] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
-
-  const callbackUrl = `${window.location.origin}/api/integrations/x/callback`;
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   // Listen to OAuth popup messages
   useEffect(() => {
@@ -138,40 +135,13 @@ export const OnboardingView: React.FC = () => {
           setConnectError('Popup blocked by browser. Please allow popups for this site and try again.');
         }
       } else {
-        // Not configured in environment variables: show configuration guide & test option
         setIsConnecting(false);
-        setShowConfigHelper(true);
+        setConnectError('X connection is not available right now. You can continue to an empty library and connect later from Settings.');
       }
     } catch (err: any) {
       setIsConnecting(false);
       setConnectError(err.message || 'Could not initiate connection to X.');
     }
-  };
-
-  const handleConnectTestStream = async () => {
-    setIsConnecting(true);
-    setShowConfigHelper(false);
-    try {
-      const testRes = await api.testConnectX('faruk', name || 'Faruk');
-      if (testRes.success) {
-        setConnectedXUser({
-          username: testRes.account.username || 'faruk',
-          displayName: testRes.account.displayName || name || 'Faruk',
-          avatarUrl: testRes.account.avatarUrl,
-        });
-        await refreshXStatus();
-      }
-    } catch (e: any) {
-      setConnectError('Could not connect test account.');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const copyCallbackUrl = () => {
-    navigator.clipboard.writeText(callbackUrl);
-    setCopiedCallback(true);
-    setTimeout(() => setCopiedCallback(false), 2000);
   };
 
   // Common timezones list for selection
@@ -196,12 +166,13 @@ export const OnboardingView: React.FC = () => {
 
   const handleFinishOnboarding = async () => {
     setIsFinishing(true);
+    setFinishError(null);
     try {
       await completeOnboarding(name, timezone);
       navigate('/dashboard');
     } catch (e) {
       console.warn('Complete onboarding error:', e);
-      navigate('/dashboard');
+      setFinishError('Your profile could not be saved. Please try again.');
     } finally {
       setIsFinishing(false);
     }
@@ -231,18 +202,18 @@ export const OnboardingView: React.FC = () => {
           ))}
         </div>
 
-        {/* STEP 1: Welcome to Recallly */}
+        {/* STEP 1 */}
         {step === 1 && (
           <div className="space-y-6 w-full animate-in fade-in duration-200">
             <div className="space-y-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A8A85]">
-                Welcome to Recallly
+                Welcome to Find Again
               </span>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#171717]">
                 Turn what you save into what you know.
               </h1>
               <p className="text-xs sm:text-sm text-[#70706B] max-w-md mx-auto leading-relaxed pt-1">
-                Recallly organizes the things you save so you can find, revisit and learn from them later.
+                Find Again organizes the X posts you save so you can find and revisit them later.
               </p>
             </div>
 
@@ -309,7 +280,7 @@ export const OnboardingView: React.FC = () => {
                   ))}
                 </select>
                 <p className="text-[11px] text-[#8A8A85] mt-1">
-                  Auto-detected from your browser. Used to deliver timely weekly digests.
+                  Auto-detected from your browser and used for local dates and times.
                 </p>
               </div>
 
@@ -346,7 +317,7 @@ export const OnboardingView: React.FC = () => {
                 Connect your first source
               </h2>
               <p className="text-xs text-[#70706B] max-w-sm mx-auto">
-                Recallly connects with official read-only APIs to normalize and organize your bookmarks.
+                Find Again connects through the official X integration to import and organize your bookmarks.
               </p>
             </div>
 
@@ -395,8 +366,8 @@ export const OnboardingView: React.FC = () => {
                 </div>
 
                 <div className="p-3 rounded-xl bg-white border border-emerald-200 text-xs text-[#171717] space-y-2">
-                  <p className="font-medium">Import your latest X bookmarks into Recallly.</p>
-                  <p className="text-[#70706B]">Recallly can import the latest bookmarks available through X’s official API. Older bookmarks may not be accessible through the API.</p>
+                  <p className="font-medium">Import your available X bookmarks into Find Again.</p>
+                  <p className="text-[#70706B]">Find Again can import only the bookmarks X makes available through its official API. Older bookmarks may not be accessible.</p>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" disabled={isImporting} onClick={() => void triggerInitialBookmarkImport()}
                       className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-50">Import available history</button>
@@ -437,7 +408,7 @@ export const OnboardingView: React.FC = () => {
                     <span>
                       {importedCount !== null && importedCount > 0
                         ? historicalLimitReached
-                          ? `Imported ${importedCount} bookmarks. X currently makes only the latest ${historicalLimit || 'configured'} bookmarks available through its official API. New bookmarks will continue syncing.`
+                          ? `Imported ${importedCount} bookmarks. X currently makes only the latest ${historicalLimit || 'configured'} bookmarks available through its official API. You can sync again from Connected Sources.`
                           : `Imported ${importedCount} bookmarks that X currently made available through its API.`
                         : 'Start your historical import when you are ready.'}
                     </span>
@@ -458,7 +429,7 @@ export const OnboardingView: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <span>Enter Recallly & View Bookmarks</span>
+                      <span>Enter Find Again & View Bookmarks</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -479,13 +450,13 @@ export const OnboardingView: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-[#70706B] mt-0.5">
-                      Bring your recent X bookmarks into Recallly and keep your library in sync going forward.
+                      Bring the X bookmarks available through the official API into Find Again.
                     </p>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-[#70706B] leading-relaxed">
-                  Recallly uses the official X API with read-only access. X limits how much historical bookmark data third-party apps can retrieve.
+                  Find Again uses the official X API with read-only access. X limits how much historical bookmark data third-party apps can retrieve.
                 </p>
 
                 <div className="space-y-2">
@@ -510,56 +481,12 @@ export const OnboardingView: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Configuration & Developer Details Assistant */}
-                {showConfigHelper && (
-                  <div className="p-3.5 rounded-xl bg-white border border-[#E0E0DC] space-y-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#171717] flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5 text-blue-600" />
-                        <span>X Developer Setup Assistant</span>
-                      </span>
-                      <button
-                        onClick={() => setShowConfigHelper(false)}
-                        className="text-[11px] text-[#8A8A85] hover:text-[#171717]"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-
-                    <p className="text-[11px] text-[#70706B] leading-relaxed">
-                      To authenticate with your live X account, configure <code className="bg-[#F4F4F1] px-1 py-0.5 rounded font-mono text-[10px]">X_CLIENT_ID</code> in AI Studio settings. Use this exact Redirect URL in your X Developer Portal:
-                    </p>
-
-                    <div className="flex items-center gap-1.5 p-2 bg-[#F7F7F5] border border-[#E8E8E5] rounded-lg">
-                      <code className="text-[11px] font-mono text-[#171717] truncate flex-1">
-                        {callbackUrl}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={copyCallbackUrl}
-                        className="p-1 rounded text-[#70706B] hover:text-[#171717] hover:bg-white"
-                        title="Copy callback URL"
-                      >
-                        {copiedCallback ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={handleConnectTestStream}
-                        className="w-full py-2 px-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 font-medium text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Connect Test Stream to Verify Sync Flow</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
-            {/* Explore Demo Library Option */}
+            {finishError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{finishError}</div>}
+
+            {/* Continue without connecting */}
             <div className="pt-2 space-y-2">
               <button
                 id="onboarding-explore-library-btn"
@@ -575,12 +502,13 @@ export const OnboardingView: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-indigo-500" />
-                    <span>{connectedXUser ? 'Continue to dashboard' : 'Explore demo library'}</span>
+                    <span>{connectedXUser ? 'Continue to dashboard' : 'Continue without connecting'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
+
+              {!connectedXUser && <p className="text-[11px] text-[#8A8A85]">Your library will be empty until you connect X and import from Connected Sources.</p>}
 
               <button
                 type="button"

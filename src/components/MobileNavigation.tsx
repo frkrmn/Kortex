@@ -3,12 +3,9 @@ import {
   Home,
   Bookmark as BookmarkIcon,
   Search,
-  MessageSquareText,
   Menu,
   Layers,
   FolderKanban,
-  Sparkles,
-  Mail,
   Settings,
   X,
 } from 'lucide-react';
@@ -44,7 +41,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
           <div className="w-7 h-7 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs shadow-xs">
             <Layers className="w-4 h-4" />
           </div>
-          <span className="font-semibold text-sm tracking-tight text-[#171717]">Recallly</span>
+          <span className="font-semibold text-sm tracking-tight text-[#171717]">Find Again</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -112,22 +109,9 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
         </button>
 
         <button
-          onClick={() => {
-            setIsMoreOpen(false);
-            navigate('/ask');
-          }}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[11px] font-medium transition-colors ${
-            route === 'ask' ? 'text-[#1E3A8A]' : 'text-[#70706B]'
-          }`}
-        >
-          <MessageSquareText className={`w-4 h-4 ${route === 'ask' ? 'text-[#2563EB]' : 'text-[#70706B]'}`} />
-          <span>Ask AI</span>
-        </button>
-
-        <button
           onClick={() => setIsMoreOpen(!isMoreOpen)}
           className={`flex flex-col items-center gap-0.5 p-1 text-[11px] font-medium transition-colors ${
-            isMoreOpen || route === 'collections' || route === 'insights' || route === 'digests' || route === 'settings'
+            isMoreOpen || route === 'collections' || route === 'settings'
               ? 'text-[#1E3A8A]'
               : 'text-[#70706B]'
           }`}
@@ -175,36 +159,6 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
               >
                 <FolderKanban className="w-4 h-4 text-[#2563EB]" />
                 <span>Collections</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsMoreOpen(false);
-                  navigate('/insights');
-                }}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-medium text-left ${
-                  route === 'insights'
-                    ? 'bg-[#EEF4FF] border-[#BFDBFE] text-[#1E3A8A]'
-                    : 'bg-white border-[#E8E8E5] text-[#171717]'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-[#6366F1]" />
-                <span>Insights</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsMoreOpen(false);
-                  navigate('/digests');
-                }}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-medium text-left ${
-                  route === 'digests' || route === 'digest-detail'
-                    ? 'bg-[#EEF4FF] border-[#BFDBFE] text-[#1E3A8A]'
-                    : 'bg-white border-[#E8E8E5] text-[#171717]'
-                }`}
-              >
-                <Mail className="w-4 h-4 text-[#4F46E5]" />
-                <span>Digests</span>
               </button>
 
               <button

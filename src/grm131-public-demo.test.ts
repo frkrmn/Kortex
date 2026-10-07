@@ -58,7 +58,7 @@ test('public demo uses fixtures and has no production or provider API dependency
   const demo = read('./views/PublicDemoView.tsx');
   assert.match(demo, /demoBookmarks/);
   assert.match(demo, /Interactive Demo · Demo data/);
-  assert.match(demo, /Start using Recallly/);
+  assert.match(demo, /Start using Find Again/);
   assert.doesNotMatch(demo, /from ['"]\.\.\/lib\/api['"]/);
   assert.doesNotMatch(demo, /supabase/i);
   assert.doesNotMatch(demo, /syncX|Gemini|checkout/i);

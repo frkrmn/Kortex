@@ -65,18 +65,18 @@ export const BillingSettingsSection: React.FC = () => {
   return <>
     <div className="space-y-5 rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div><p className="text-xs font-medium text-[#70706B]">Current plan</p><div className="mt-1 flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[#171717]">{isPro ? 'Recallly Pro' : 'Recallly Free'}</h2><span className="rounded-md bg-[#F0F0EC] px-2 py-0.5 text-[10px] font-semibold capitalize text-[#5C5C58]">{statusLabel}</span></div></div>
+        <div><p className="text-xs font-medium text-[#70706B]">Current plan</p><div className="mt-1 flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[#171717]">{isPro ? 'Find Again Pro' : 'Find Again Free'}</h2><span className="rounded-md bg-[#F0F0EC] px-2 py-0.5 text-[10px] font-semibold capitalize text-[#5C5C58]">{statusLabel}</span></div></div>
         {canManageBilling ? <button type="button" onClick={openPortal} disabled={portalLoading} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#D0D0CB] bg-white px-4 py-2 text-xs font-semibold text-[#171717] disabled:opacity-50">{portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}Manage billing</button> : <button type="button" onClick={() => setShowUpgrade(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#171717] px-4 py-2 text-xs font-semibold text-white">Review Pro in checkout<ExternalLink className="h-3.5 w-3.5" /></button>}
       </div>
 
-      {subscription.status === 'trialing' && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900"><strong>Trial active.</strong> Recallly's configured trial term is {DEFAULT_TRIAL_DAYS} days.{trialEnd ? ` Your current trial ends ${trialEnd}.` : ''}</div>}
+      {subscription.status === 'trialing' && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900"><strong>Trial active.</strong> Find Again's configured trial term is {DEFAULT_TRIAL_DAYS} days.{trialEnd ? ` Your current trial ends ${trialEnd}.` : ''}</div>}
       {subscription.cancel_at_period_end && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Your subscription is set to end{periodEnd ? ` on ${periodEnd}` : ' at the end of the current billing period'}. Manage it in the Stripe billing portal.</div>}
       {subscription.status === 'past_due' && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Stripe reports that payment is past due. Open billing management to review the account.</div>}
       {actionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{actionError}</p>}
 
       <div className="grid grid-cols-1 gap-4 border-t border-[#F0F0EC] pt-5 sm:grid-cols-2">
-        <div className="rounded-xl bg-[#FAFAF8] p-4"><p className="text-xs font-semibold text-[#171717]">Pricing and payment</p><p className="mt-1 text-xs leading-relaxed text-[#70706B]">See Stripe Checkout for the current price, billing interval, and payment terms. Recallly does not duplicate unverified price amounts here.</p></div>
-        <div className="rounded-xl bg-[#FAFAF8] p-4"><p className="text-xs font-semibold text-[#171717]">Usage</p><p className="mt-1 text-xs leading-relaxed text-[#70706B]">X imports and manual sync do not consume customer credits. Recallly does not currently present a customer usage quota dashboard.</p></div>
+        <div className="rounded-xl bg-[#FAFAF8] p-4"><p className="text-xs font-semibold text-[#171717]">Pricing and payment</p><p className="mt-1 text-xs leading-relaxed text-[#70706B]">See Stripe Checkout for the current price, billing interval, and payment terms. Find Again does not duplicate unverified price amounts here.</p></div>
+        <div className="rounded-xl bg-[#FAFAF8] p-4"><p className="text-xs font-semibold text-[#171717]">Usage</p><p className="mt-1 text-xs leading-relaxed text-[#70706B]">X imports and manual sync do not consume customer credits. Find Again does not currently present a customer usage quota dashboard.</p></div>
       </div>
     </div>
     <UpgradeModal isOpen={showUpgrade} onClose={() => setShowUpgrade(false)} onSuccess={() => void load()} />

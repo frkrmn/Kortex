@@ -3,9 +3,6 @@ import {
   Home,
   Bookmark as BookmarkIcon,
   FolderKanban,
-  Sparkles,
-  MessageSquareText,
-  Mail,
   Settings,
   Search,
   PanelLeftClose,
@@ -29,18 +26,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
     { id: 'dashboard', label: 'Home', path: '/dashboard', icon: <Home className="w-4 h-4" /> },
     { id: 'bookmarks', label: 'Bookmarks', path: '/bookmarks', icon: <BookmarkIcon className="w-4 h-4" /> },
     { id: 'collections', label: 'Collections', path: '/collections', icon: <FolderKanban className="w-4 h-4" /> },
-    { id: 'ask', label: 'Ask AI', path: '/ask', icon: <MessageSquareText className="w-4 h-4" /> },
-    { id: 'insights', label: 'Insights', path: '/insights', icon: <Sparkles className="w-4 h-4" /> },
-    { id: 'digests', label: 'Digests', path: '/digests', icon: <Mail className="w-4 h-4" /> },
   ];
 
   const isCurrentActive = (itemRoute: string) => {
     if (itemRoute === 'dashboard') return route === 'dashboard';
     if (itemRoute === 'bookmarks') return route === 'bookmarks' || route === 'bookmark-detail';
     if (itemRoute === 'collections') return route === 'collections' || route === 'collection-detail';
-    if (itemRoute === 'ask') return route === 'ask';
-    if (itemRoute === 'insights') return route === 'insights';
-    if (itemRoute === 'digests') return route === 'digests' || route === 'digest-detail';
     return false;
   };
 
@@ -56,7 +47,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
         <button
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2.5 group cursor-pointer text-left"
-          title="Recallly"
+          title="Find Again"
         >
           <div className="w-7 h-7 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs shadow-xs shrink-0 group-hover:bg-[#2A2A2A] transition-colors">
             <Layers className="w-4 h-4" />
@@ -64,7 +55,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
           {!sidebarCollapsed && (
             <div className="flex flex-col">
               <span className="font-semibold text-sm tracking-tight text-[#171717] leading-none">
-                Recallly
+                Find Again
               </span>
               <span className="text-[10px] text-[#8A8A85] tracking-tight font-medium mt-0.5">
                 Personal Library
@@ -165,7 +156,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
             {!sidebarCollapsed && (
               <div className="min-w-0 text-left">
                 <p className="text-xs font-medium text-[#171717] truncate leading-tight">
-                  {profile?.display_name || 'Recallly account'}
+                  {profile?.display_name || 'Find Again account'}
                 </p>
                 <p className="text-[10px] text-[#8A8A85] truncate leading-tight">
                   {profile?.email || ''}

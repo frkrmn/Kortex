@@ -93,7 +93,7 @@ function callbackPage(res: Response, payload: Record<string, unknown>, origin: s
   // Helmet's default same-origin policy can sever the popup's opener after
   // navigation through x.com. The callback must be able to notify its opener.
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  res.status(status).type('html').send(`<!doctype html><html><head><meta name="referrer" content="no-referrer"><title>Kortex X connection</title></head><body><p>You may close this window.</p><script>
+  res.status(status).type('html').send(`<!doctype html><html><head><meta name="referrer" content="no-referrer"><title>Find Again X connection</title></head><body><p>You may close this window.</p><script>
     history.replaceState(null, '', '/settings');
     const result = ${jsonForScript(payload)};
     if (window.opener) window.opener.postMessage(result, ${jsonForScript(origin)});
@@ -281,7 +281,7 @@ export async function syncLiveX(userId: string, options: XSyncOptions = {}, depe
       return { success: false, addedCount: 0, discoveredCount: 0, requestCount: 0, queuedCount: 0,
         items: [], statusCode: terminalAuthorization ? 409 : response.status === 429 ? 429 : 503,
         error: terminalAuthorization ? 'Reconnect X to continue syncing.'
-          : 'X sync is temporarily unavailable. Your existing Recallly library is still available.' };
+          : 'X sync is temporarily unavailable. Your existing Find Again library is still available.' };
     }
     const tokens = await response.json();
     if (typeof tokens.access_token !== 'string') throw new Error('X refresh did not return an access token.');
@@ -359,7 +359,7 @@ export async function syncLiveX(userId: string, options: XSyncOptions = {}, depe
           const retryAt = Number.isFinite(reset) && reset * 1000 > Date.now() ? new Date(reset * 1000) : new Date(Date.now() + 15 * 60000);
           await db.from('connected_accounts').update({ next_sync_at: retryAt.toISOString() }).eq('id', account.id);
         }
-        if (response.status === 402) throw new XBookmarkPaymentRequiredError('X sync is temporarily unavailable. Your existing Recallly library is still available.');
+        if (response.status === 402) throw new XBookmarkPaymentRequiredError('X sync is temporarily unavailable. Your existing Find Again library is still available.');
         throw new XBookmarkProviderError(response.status);
       }
       let payload: XApiBookmarkPage;
@@ -479,7 +479,7 @@ export async function syncLiveX(userId: string, options: XSyncOptions = {}, depe
     ]);
     if (safeStatus) return { success: false, addedCount: 0, discoveredCount: 0, requestCount, queuedCount: 0,
       items: [], statusCode: safeStatus, error: paymentRequired ? (syncError as Error).message
-        : reauthorizationRequired ? 'Reconnect X to continue syncing.' : 'X sync is temporarily unavailable. Your existing Recallly library is still available.' };
+        : reauthorizationRequired ? 'Reconnect X to continue syncing.' : 'X sync is temporarily unavailable. Your existing Find Again library is still available.' };
     throw syncError;
   }
 }

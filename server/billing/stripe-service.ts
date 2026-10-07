@@ -1,5 +1,5 @@
 /**
- * Recallly Stripe Billing Service
+ * Find Again Stripe Billing Service
  * Handles Checkout sessions, Customer Portal, and Stripe Webhook lifecycle.
  *
  * Designed with lazy SDK initialization to avoid crashing when STRIPE_SECRET_KEY is absent,
@@ -30,7 +30,7 @@ export class StripeService {
           this.stripeClient = new Stripe(apiKey, {
             apiVersion: '2025-02-24.acacia' as any,
             appInfo: {
-              name: 'Recallly',
+              name: 'Find Again',
               version: '1.0.0',
             },
           });

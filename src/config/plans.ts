@@ -1,5 +1,5 @@
 /**
- * Recallly Centralized Plan & Pricing Configuration
+ * Find Again Centralized Plan & Pricing Configuration
  * Single source of truth for plans, limits, features, and commercial prices.
  * Do not scatter plan limits or Stripe Price IDs across components.
  */
@@ -18,7 +18,7 @@ export type SubscriptionStatus =
 
 export const DEFAULT_X_BOOKMARK_HISTORY_LIMIT = 800;
 export const X_HISTORY_EXPLANATION =
-  "Recallly imports the most recent bookmarks made available through X's official API. Older bookmarks may not be accessible during your initial import.";
+  "Find Again imports the most recent bookmarks made available through X's official API. Older bookmarks may not be accessible during your initial import.";
 
 export interface PlanLimits {
   bookmarkLimit: number | null; // null = unlimited
@@ -87,7 +87,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       },
     },
     limits: {
-      bookmarkLimit: null, // X history is limited by provider availability, not a Recallly storage quota.
+      bookmarkLimit: null, // X history is limited by provider availability, not a Find Again storage quota.
       monthlyAskLimit: 10,
       monthlyEnrichmentLimit: 25,
       syncAccountLimit: 1,
@@ -97,14 +97,14 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       semanticSearch: false, // Lexical search with high quality ranking
       digests: false, // Read-only for historical digests, generation requires Pro
       advancedInsights: false, // Basic stats & top topics only
-      rediscovery: true, // Basic rediscovery candidates
+      rediscovery: false, // Not exposed as a production feature.
       priorityProcessing: false,
       exportData: true,
     },
     marketingHighlights: [
       'Connect X and import recent bookmarks',
       'Manual X bookmark sync',
-      'Read and organize bookmarks in Recallly',
+      'Read and organize bookmarks in Find Again',
       'Search by saved content and metadata',
       '1 connected X account',
       'Full JSON data export anytime',
@@ -113,7 +113,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    tagline: 'Expanded Recallly access',
+    tagline: 'Expanded Find Again access',
     description: 'Review the currently available Pro terms and price in Stripe Checkout.',
     badge: 'Most Popular',
     prices: {
@@ -139,15 +139,15 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       syncIntervalHours: 2, // Pro: high-frequency automatic background sync every 2 hours
     },
     features: {
-      semanticSearch: true, // Dense vector embeddings + RRF hybrid search
-      digests: true, // Personalized weekly intelligence digests
-      advancedInsights: true, // Deep topic connections, knowledge decay, serendipity
-      rediscovery: true, // Smart contextual rediscovery engine
+      semanticSearch: false, // Production search is deterministic keyword and metadata search.
+      digests: false, // Digest lifecycle is not exposed in production.
+      advancedInsights: false, // Insights are not exposed in production.
+      rediscovery: false, // Rediscovery is not exposed in production.
       priorityProcessing: true,
       exportData: true,
     },
     marketingHighlights: [
-      'Everything currently available in Recallly Free',
+      'Everything currently available in Find Again Free',
       'Review current Pro access in Stripe Checkout',
       'Secure subscription management through Stripe',
     ],

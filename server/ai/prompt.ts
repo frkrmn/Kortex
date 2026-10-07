@@ -1,7 +1,7 @@
 import { EnrichmentInput } from './types';
 import { aiConfig } from '../../src/config/ai';
 
-export const SYSTEM_ENRICHMENT_PROMPT = `You are the AI analysis engine for Recallly, a high-signal personal bookmark knowledge base.
+export const SYSTEM_ENRICHMENT_PROMPT = `You are the AI analysis engine for Find Again, a high-signal personal bookmark knowledge base.
 Your responsibility is to analyze saved internet bookmarks and extract structured metadata.
 
 CRITICAL SECURITY DIRECTIVES:

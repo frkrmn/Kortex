@@ -57,11 +57,11 @@ export const PublicDemoView: React.FC = () => {
     <div id="public-interactive-demo" className="min-h-screen bg-[#FAFAF8] text-[#171717]">
       <header className="sticky top-0 z-40 border-b border-[#E8E8E5] bg-[#FAFAF8]/95 backdrop-blur-md">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <button type="button" onClick={() => navigate('/')} className="flex items-center gap-2.5" aria-label="Back to Recallly home">
+          <button type="button" onClick={() => navigate('/')} className="flex items-center gap-2.5" aria-label="Back to Find Again home">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#171717] text-white">
               <Layers className="h-4 w-4" />
             </span>
-            <span className="font-bold tracking-tight">Recallly</span>
+            <span className="font-bold tracking-tight">Find Again</span>
           </button>
 
           <div className="order-3 flex w-full items-center justify-center sm:order-2 sm:w-auto" aria-label="Demo environment">
@@ -75,7 +75,7 @@ export const PublicDemoView: React.FC = () => {
             onClick={() => navigate('/signup')}
             className="order-2 inline-flex items-center gap-1.5 rounded-xl bg-[#171717] px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#2B2B2B] sm:order-3"
           >
-            Start using Recallly <ArrowRight className="h-3.5 w-3.5" />
+            Start using Find Again <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </header>

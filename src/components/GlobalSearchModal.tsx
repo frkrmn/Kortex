@@ -6,13 +6,9 @@ import {
   FolderKanban,
   Tag,
   ArrowRight,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
-import { api } from '../lib/api';
-import { Bookmark, Collection, Topic } from '../types';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -24,19 +20,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onClose,
 }) => {
   const { navigate } = useRouter();
-  const { bookmarks, collections, topics, searchBookmarks } = useDemoStore();
+  const { bookmarks, collections, topics, searchBookmarks, bookmarksLoadState, collectionsLoadState } = useDemoStore();
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
-  const [serverResults, setServerResults] = useState<{
-    bookmarks: Bookmark[];
-    searchResults?: { item: Bookmark; score: number; matchType: 'lexical' | 'semantic' | 'hybrid' }[];
-    collections: Collection[];
-    topics: Topic[];
-    searchMode?: string;
-    latencyMs?: number;
-  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,7 +32,6 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     } else {
       setQuery('');
       setSelectedIndex(0);
-      setServerResults(null);
     }
   }, [isOpen]);
 
@@ -61,50 +47,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Debounced server-side hybrid search with fallback to local store
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setServerResults(null);
-      setIsSearching(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await api.globalSearch(trimmed);
-        setServerResults(res);
-      } catch (err) {
-        console.warn('Global search API fallback to local:', err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [query]);
-
   if (!isOpen) return null;
 
-  // Bookmarks from server hybrid search or local fallback
-  const searchResultsList = serverResults?.searchResults || [];
-  const matchedBookmarks: Bookmark[] = serverResults
-    ? serverResults.bookmarks.slice(0, 6)
-    : query.trim()
-    ? searchBookmarks(query).slice(0, 5)
-    : [];
-
-  // Match lookup for hybrid/semantic badge
-  const matchMap = new Map<string, { matchType: 'lexical' | 'semantic' | 'hybrid'; score: number }>();
-  searchResultsList.forEach((sr) => {
-    matchMap.set(sr.item.id, { matchType: sr.matchType, score: sr.score });
-  });
+  const matchedBookmarks = query.trim() ? searchBookmarks(query).slice(0, 6) : [];
 
   // Collections
-  const matchedCollections = serverResults
-    ? serverResults.collections.slice(0, 3)
-    : query.trim()
+  const matchedCollections = query.trim()
     ? collections
         .filter(
           (c) =>
@@ -115,9 +63,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     : [];
 
   // Topics
-  const matchedTopics = serverResults
-    ? serverResults.topics.slice(0, 4)
-    : query.trim()
+  const matchedTopics = query.trim()
     ? topics.filter((t) => t.name.toLowerCase().includes(query.toLowerCase())).slice(0, 4)
     : [];
 
@@ -163,6 +109,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
         {/* Results Body */}
         <div className="flex-1 overflow-y-auto p-2 space-y-3">
+          {(bookmarksLoadState === 'loading' || collectionsLoadState === 'loading') && <div role="status" className="p-4 text-center text-xs text-[#70706B]">Loading your searchable library…</div>}
+          {(bookmarksLoadState === 'error' || collectionsLoadState === 'error') && <div role="alert" className="m-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Some library data could not be loaded. Results may be incomplete.</div>}
           {!hasQuery ? (
             /* Suggested when empty */
             <div className="p-3 space-y-3">
@@ -170,17 +118,6 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 Quick Navigation & Topics
               </span>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    navigate('/ask');
-                    onClose();
-                  }}
-                  className="flex items-center gap-2 p-2 rounded-xl border border-[#E8E8E5] hover:bg-[#FAFAF8] text-xs font-medium text-[#171717] transition-colors text-left"
-                >
-                  <Sparkles className="w-4 h-4 text-[#2563EB]" />
-                  <span>Ask AI Assistant</span>
-                </button>
-
                 <button
                   onClick={() => {
                     navigate('/bookmarks?filter=unread');
@@ -194,24 +131,24 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
                 <button
                   onClick={() => {
-                    navigate('/bookmarks?topic=ai');
+                    navigate('/collections');
                     onClose();
                   }}
                   className="flex items-center gap-2 p-2 rounded-xl border border-[#E8E8E5] hover:bg-[#FAFAF8] text-xs font-medium text-[#171717] transition-colors text-left"
                 >
-                  <Tag className="w-4 h-4 text-[#2563EB]" />
-                  <span>AI & Agents</span>
+                  <FolderKanban className="w-4 h-4 text-[#2563EB]" />
+                  <span>Collections</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    navigate('/bookmarks?topic=product');
+                    navigate('/bookmarks');
                     onClose();
                   }}
                   className="flex items-center gap-2 p-2 rounded-xl border border-[#E8E8E5] hover:bg-[#FAFAF8] text-xs font-medium text-[#171717] transition-colors text-left"
                 >
-                  <Tag className="w-4 h-4 text-[#70706B]" />
-                  <span>Product Strategy</span>
+                  <BookmarkIcon className="w-4 h-4 text-[#70706B]" />
+                  <span>All Bookmarks</span>
                 </button>
               </div>
             </div>
@@ -258,7 +195,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <button
                         key={t.id}
                         onClick={() => {
-                          navigate(`/bookmarks?topic=${t.id}`);
+                          navigate(`/bookmarks?topic=${encodeURIComponent(t.name.toLowerCase())}`);
                           onClose();
                         }}
                         className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[#EEF4FF] text-[#1E3A8A] border border-[#BFDBFE] hover:bg-[#DBEAFE] transition-colors cursor-pointer"
@@ -277,16 +214,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8A85]">
                       Bookmarks
                     </span>
-                    {serverResults?.latencyMs !== undefined && (
-                      <span className="text-[10px] text-[#8A8A85] flex items-center gap-1">
-                        <Zap className="w-2.5 h-2.5 text-amber-500" />
-                        {serverResults.searchMode || 'Hybrid'} • {serverResults.latencyMs}ms
-                      </span>
-                    )}
+                    <span className="text-[10px] text-[#8A8A85]">Keyword search</span>
                   </div>
-                  {matchedBookmarks.map((bm) => {
-                    const matchInfo = matchMap.get(bm.id);
-                    return (
+                  {matchedBookmarks.map((bm) => (
                       <button
                         key={bm.id}
                         onClick={() => {
@@ -306,23 +236,6 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                               {bm.author_name}
                             </span>
                             <span className="text-[10px] text-[#8A8A85]">@{bm.author_username}</span>
-                            {matchInfo && (
-                              <span
-                                className={`text-[10px] font-medium px-1.5 py-0.2 rounded border ${
-                                  matchInfo.matchType === 'semantic'
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                    : matchInfo.matchType === 'hybrid'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'
-                                }`}
-                              >
-                                {matchInfo.matchType === 'semantic'
-                                  ? 'Vector'
-                                  : matchInfo.matchType === 'hybrid'
-                                  ? 'Hybrid'
-                                  : 'Keyword'}
-                              </span>
-                            )}
                           </div>
                           <p className="text-xs text-[#52524E] line-clamp-2 mt-0.5">
                             {bm.content}
@@ -330,8 +243,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                         </div>
                         <ArrowRight className="w-3.5 h-3.5 text-[#8A8A85] group-hover:text-[#2563EB] shrink-0 mt-1" />
                       </button>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
 
@@ -349,7 +261,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         {/* Footer */}
         <div className="px-4 py-2 border-t border-[#E8E8E5] bg-[#FAFAF8] text-[11px] text-[#8A8A85] flex items-center justify-between">
           <span>Navigate with click or search query</span>
-          <span>Recallly Global Search</span>
+          <span>Find Again keyword search</span>
         </div>
       </div>
     </div>

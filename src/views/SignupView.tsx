@@ -100,7 +100,7 @@ export const SignupView: React.FC = () => {
             <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
               <Layers className="w-5 h-5" />
             </div>
-            <span className="font-bold text-xl tracking-tight text-[#171717]">Recallly</span>
+            <span className="font-bold text-xl tracking-tight text-[#171717]">Find Again</span>
           </div>
 
           <div className="bg-[#FFFFFF] py-8 px-6 sm:px-10 border border-[#E8E8E5] rounded-3xl shadow-xs text-center space-y-5">
@@ -175,7 +175,7 @@ export const SignupView: React.FC = () => {
           <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
             <Layers className="w-5 h-5" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-[#171717]">Recallly</span>
+          <span className="font-bold text-xl tracking-tight text-[#171717]">Find Again</span>
         </div>
 
         {/* Card */}

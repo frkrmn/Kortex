@@ -1,5 +1,5 @@
 /**
- * Recallly Entitlement Service
+ * Find Again Entitlement Service
  * Single source of truth for authorization, plan limits, feature access,
  * and server-authoritative usage metering.
  *
@@ -186,7 +186,7 @@ export class EntitlementService {
         exportData: 'Complete data export',
       };
       throw new EntitlementError(
-        `The feature "${featureNames[feature] || feature}" requires an active Recallly Pro subscription.`,
+        `The feature "${featureNames[feature] || feature}" requires an active Find Again Pro subscription.`,
         'FEATURE_LOCKED',
         403,
         { feature, requiredPlan: 'pro' }
@@ -205,7 +205,7 @@ export class EntitlementService {
     const remaining = await this.getRemainingUsage(userId, metric);
     if (remaining !== null && remaining < cost) {
       const metricNames: Record<string, string> = {
-        ask: 'Ask Recallly monthly question limit',
+        ask: 'Ask Find Again monthly question limit',
         enrichment: 'monthly AI enrichment limit',
         bookmarks: 'bookmark storage capacity',
       };
@@ -232,7 +232,7 @@ export class EntitlementService {
     const remaining = await this.getRemainingUsage(userId, metric);
     if (remaining !== null && remaining < cost) {
       const metricNames: Record<string, string> = {
-        ask: 'Ask Recallly monthly question limit',
+        ask: 'Ask Find Again monthly question limit',
         enrichment: 'monthly AI enrichment limit',
         bookmarks: 'bookmark storage capacity',
       };

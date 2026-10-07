@@ -350,7 +350,7 @@ Summary: ${b.ai_summary}
 Content: "${b.content}"
 `).join('\n---\n');
 
-        const systemInstruction = `You are Kortex AI, an intelligent personal knowledge assistant connected exclusively to the user's saved bookmarks.
+        const systemInstruction = `You are Find Again AI, an intelligent personal knowledge assistant connected exclusively to the user's saved bookmarks.
 Your job is to answer the user's question directly based on their retrieved bookmarks.
 
 CRITICAL RULES:

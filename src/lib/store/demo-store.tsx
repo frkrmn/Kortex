@@ -7,7 +7,6 @@ import {
   DigestSettings,
   UserProfile,
   ConnectedAccount,
-  Subscription,
   SyncProgressState,
   RediscoveryCandidateItem,
   InsightsData,
@@ -15,7 +14,6 @@ import {
 import {
   demoUser,
   demoConnectedAccounts,
-  demoSubscription,
   demoDigestSettings,
   demoTopics,
   demoBookmarks,
@@ -61,11 +59,12 @@ interface DemoStoreContextType {
   connectedAccounts: ConnectedAccount[];
   xStatus: XStatusState;
   syncProgress: SyncProgressState;
-  subscription: Subscription;
   digestSettings: DigestSettings;
   topics: Topic[];
   bookmarks: Bookmark[];
   collections: Collection[];
+  bookmarksLoadState: 'loading' | 'ready' | 'error';
+  collectionsLoadState: 'loading' | 'ready' | 'error';
   digests: Digest[];
   insights: RichInsightsData | InsightsData;
   rediscoveryCandidates: RediscoveryCandidateItem[];
@@ -80,14 +79,16 @@ interface DemoStoreContextType {
   showToast: (message: string) => void;
   clearToast: () => void;
 
-  toggleFavorite: (id: string) => void;
-  toggleRead: (id: string) => void;
-  deleteBookmark: (id: string) => void;
+  toggleFavorite: (id: string) => Promise<void>;
+  toggleRead: (id: string) => Promise<void>;
+  deleteBookmark: (id: string) => Promise<void>;
 
-  createCollection: (name: string, description: string, visibility: 'public' | 'private') => Collection;
-  updateCollection: (id: string, updates: Partial<Collection>) => void;
-  deleteCollection: (id: string) => void;
-  toggleBookmarkInCollection: (collectionId: string, bookmarkId: string) => void;
+  createCollection: (name: string, description: string, visibility: 'public' | 'private') => Promise<Collection>;
+  updateCollection: (id: string, updates: Partial<Collection>) => Promise<void>;
+  deleteCollection: (id: string) => Promise<void>;
+  toggleBookmarkInCollection: (collectionId: string, bookmarkId: string) => Promise<void>;
+  reloadBookmarks: () => Promise<void>;
+  reloadCollections: () => Promise<void>;
 
   updateProfile: (updates: Partial<UserProfile>) => void;
   updateDigestSettings: (updates: Partial<DigestSettings>) => void;
@@ -204,6 +205,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return demoCollections;
     }
   });
+  const [bookmarksLoadState, setBookmarksLoadState] = useState<'loading' | 'ready' | 'error'>(demoMode ? 'ready' : 'loading');
+  const [collectionsLoadState, setCollectionsLoadState] = useState<'loading' | 'ready' | 'error'>(demoMode ? 'ready' : 'loading');
 
   const [profile, setProfile] = useState<UserProfile>(() => {
     if (!demoMode) return productionProfile;
@@ -310,18 +313,37 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     refreshXStatus();
   }, [refreshXStatus]);
 
+  const reloadBookmarks = useCallback(async () => {
+    if (demoMode) return;
+    setBookmarksLoadState('loading');
+    try {
+      const serverBookmarks = await api.getBookmarks();
+      setBookmarks(sortBookmarksNewestFirst<Bookmark>(serverBookmarks));
+      setBookmarksLoadState('ready');
+    } catch (error) {
+      console.warn('Could not fetch bookmarks:', error);
+      setBookmarksLoadState('error');
+    }
+  }, [demoMode]);
+
+  const reloadCollections = useCallback(async () => {
+    if (demoMode) return;
+    setCollectionsLoadState('loading');
+    try {
+      setCollections(await api.getCollections());
+      setCollectionsLoadState('ready');
+    } catch (error) {
+      console.warn('Could not fetch collections:', error);
+      setCollectionsLoadState('error');
+    }
+  }, [demoMode]);
+
   // Production data is server-owned. Never hydrate a signed-in user from the
   // interactive demo fixture/localStorage namespace.
   useEffect(() => {
-    if (demoMode) return;
-    let cancelled = false;
-    api.getBookmarks()
-      .then((serverBookmarks) => {
-        if (!cancelled) setBookmarks(sortBookmarksNewestFirst<Bookmark>(serverBookmarks));
-      })
-      .catch((error) => console.warn('Could not fetch bookmarks:', error));
-    return () => { cancelled = true; };
-  }, [demoMode]);
+    void reloadBookmarks();
+    void reloadCollections();
+  }, [reloadBookmarks, reloadCollections]);
 
   // Add imported bookmarks helper (deduplicated)
   const addImportedBookmarks = useCallback((newItems: Bookmark[]) => {
@@ -585,124 +607,113 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const dataMode: 'demo' | 'supabase' = demoMode ? 'demo' : 'supabase';
 
   // Mutations
-  const toggleFavorite = useCallback((id: string) => {
-    setBookmarks((prev) => {
-      const next = prev.map((b) => (b.id === id ? { ...b, is_favorite: !b.is_favorite } : b));
-      const target = next.find((b) => b.id === id);
-      if (target) {
-        repositories.savedItems.updateFavoriteStatus(id, target.is_favorite).catch(console.error);
-      }
-      return next;
-    });
-  }, []);
+  const toggleFavorite = useCallback(async (id: string) => {
+    const current = bookmarks.find((bookmark) => bookmark.id === id);
+    if (!current) return;
+    try {
+      if (demoMode) await repositories.savedItems.updateFavoriteStatus(id, !current.is_favorite);
+      else await api.updateBookmark(id, { is_favorite: !current.is_favorite });
+      setBookmarks((previous) => previous.map((bookmark) => bookmark.id === id ? { ...bookmark, is_favorite: !current.is_favorite } : bookmark));
+    } catch (error) {
+      console.warn('Could not update favorite state:', error);
+      showToast('Could not update this bookmark. Please try again.');
+    }
+  }, [bookmarks, demoMode, showToast]);
 
-  const toggleRead = useCallback((id: string) => {
-    setBookmarks((prev) => {
-      const next = prev.map((b) => (b.id === id ? { ...b, is_read: !b.is_read } : b));
-      const target = next.find((b) => b.id === id);
-      if (target) {
-        repositories.savedItems.updateReadStatus(id, target.is_read).catch(console.error);
-      }
-      return next;
-    });
-  }, []);
+  const toggleRead = useCallback(async (id: string) => {
+    const current = bookmarks.find((bookmark) => bookmark.id === id);
+    if (!current) return;
+    try {
+      if (demoMode) await repositories.savedItems.updateReadStatus(id, !current.is_read);
+      else await api.updateBookmark(id, { is_read: !current.is_read });
+      setBookmarks((previous) => previous.map((bookmark) => bookmark.id === id ? { ...bookmark, is_read: !current.is_read } : bookmark));
+    } catch (error) {
+      console.warn('Could not update read state:', error);
+      showToast('Could not update this bookmark. Please try again.');
+    }
+  }, [bookmarks, demoMode, showToast]);
 
-  const deleteBookmark = useCallback((id: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.id !== id));
-    repositories.savedItems.delete(id).catch(console.error);
-    // Also remove from any collections
-    setCollections((prev) =>
-      prev.map((col) => ({
-        ...col,
-        bookmark_ids: col.bookmark_ids.filter((bId) => bId !== id),
-      }))
-    );
-    showToast('Bookmark removed from library');
-  }, [showToast]);
+  const deleteBookmark = useCallback(async (id: string) => {
+    try {
+      if (!demoMode) throw new Error('Bookmark deletion is not available in production');
+      const deleted = await repositories.savedItems.delete(id);
+      if (!deleted) throw new Error('Bookmark was not deleted');
+      setBookmarks((previous) => previous.filter((bookmark) => bookmark.id !== id));
+      setCollections((previous) => previous.map((collection) => ({ ...collection, bookmark_ids: collection.bookmark_ids.filter((bookmarkId) => bookmarkId !== id) })));
+      showToast('Bookmark removed from library');
+    } catch (error) {
+      console.warn('Could not delete bookmark:', error);
+      showToast('Could not delete this bookmark. Please try again.');
+      throw error;
+    }
+  }, [demoMode, showToast]);
 
   const createCollection = useCallback(
-    (name: string, description: string, visibility: 'public' | 'private') => {
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-      const newCol: Collection = {
-        id: `col_${Date.now()}`,
-        user_id: profile.user_id,
-        name: name.trim(),
-        slug: slug || `col-${Date.now()}`,
-        description: description.trim(),
-        visibility,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        bookmark_ids: [],
-        creator_name: profile.display_name,
-      };
-      setCollections((prev) => [newCol, ...prev]);
-      repositories.collections.create(name.trim(), description.trim(), visibility).catch(console.error);
-      showToast(`Collection "${newCol.name}" created`);
-      return newCol;
+    async (name: string, description: string, visibility: 'public' | 'private') => {
+      try {
+        const created = demoMode
+          ? await repositories.collections.create(name.trim(), description.trim(), visibility)
+          : await api.createCollection(name.trim(), description.trim(), visibility);
+        setCollections((previous) => [created, ...previous.filter((collection) => collection.id !== created.id)]);
+        showToast(`Collection "${created.name}" created`);
+        return created;
+      } catch (error) {
+        showToast('Could not create the collection. Please try again.');
+        throw error;
+      }
     },
-    [profile, showToast]
+    [demoMode, showToast]
   );
 
   const updateCollection = useCallback(
-    (id: string, updates: Partial<Collection>) => {
-      setCollections((prev) =>
-        prev.map((col) =>
-          col.id === id
-            ? { ...col, ...updates, updated_at: new Date().toISOString() }
-            : col
-        )
-      );
-      repositories.collections.update(id, updates).catch(console.error);
-      showToast('Collection updated');
+    async (id: string, updates: Partial<Collection>) => {
+      try {
+        const updated = demoMode ? await repositories.collections.update(id, updates) : await api.updateCollection(id, updates);
+        if (!updated) throw new Error('Collection was not found');
+        setCollections((previous) => previous.map((collection) => collection.id === id ? updated : collection));
+        showToast('Collection updated');
+      } catch (error) {
+        showToast('Could not update the collection. Please try again.');
+        throw error;
+      }
     },
-    [showToast]
+    [demoMode, showToast]
   );
 
   const deleteCollection = useCallback(
-    (id: string) => {
-      setCollections((prev) => prev.filter((col) => col.id !== id));
-      repositories.collections.delete(id).catch(console.error);
-      showToast('Collection deleted');
+    async (id: string) => {
+      try {
+        if (demoMode) await repositories.collections.delete(id);
+        else await api.deleteCollection(id);
+        setCollections((previous) => previous.filter((collection) => collection.id !== id));
+        showToast('Collection deleted');
+      } catch (error) {
+        showToast('Could not delete the collection. Please try again.');
+        throw error;
+      }
     },
-    [showToast]
+    [demoMode, showToast]
   );
 
   const toggleBookmarkInCollection = useCallback(
-    (collectionId: string, bookmarkId: string) => {
-      setCollections((prev) =>
-        prev.map((col) => {
-          if (col.id !== collectionId) return col;
-          const exists = col.bookmark_ids.includes(bookmarkId);
-          const nextBookmarkIds = exists
-            ? col.bookmark_ids.filter((id) => id !== bookmarkId)
-            : [...col.bookmark_ids, bookmarkId];
-          return {
-            ...col,
-            bookmark_ids: nextBookmarkIds,
-            updated_at: new Date().toISOString(),
-          };
-        })
-      );
-      repositories.collections.toggleItem(collectionId, bookmarkId).catch(console.error);
-      // Also update collection_ids in bookmark
-      setBookmarks((prev) =>
-        prev.map((b) => {
-          if (b.id !== bookmarkId) return b;
-          const prevColIds = b.collection_ids || [];
-          const exists = prevColIds.includes(collectionId);
-          return {
-            ...b,
-            collection_ids: exists
-              ? prevColIds.filter((id) => id !== collectionId)
-              : [...prevColIds, collectionId],
-          };
-        })
-      );
+    async (collectionId: string, bookmarkId: string) => {
+      try {
+        const updated = demoMode
+          ? await repositories.collections.toggleItem(collectionId, bookmarkId)
+          : await api.toggleBookmarkInCollection(collectionId, bookmarkId);
+        if (!updated) throw new Error('Collection was not found');
+        setCollections((previous) => previous.map((collection) => collection.id === collectionId ? updated : collection));
+        setBookmarks((previous) => previous.map((bookmark) => bookmark.id === bookmarkId
+          ? { ...bookmark, collection_ids: updated.bookmark_ids.includes(bookmarkId)
+              ? [...new Set([...(bookmark.collection_ids || []), collectionId])]
+              : (bookmark.collection_ids || []).filter((id) => id !== collectionId) }
+          : bookmark));
+      } catch (error) {
+        showToast('Could not update the collection. Please try again.');
+        throw error;
+      }
     },
-    []
+    [demoMode, showToast]
   );
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
@@ -805,13 +816,6 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [profile.user_id, showToast]);
 
-  // Initial intelligence fetch
-  useEffect(() => {
-    refreshDigests();
-    refreshInsights();
-    refreshRediscovery(4, 'dashboard');
-  }, [refreshDigests, refreshInsights, refreshRediscovery]);
-
   const resetData = useCallback(() => {
     if (!demoMode) return;
     setBookmarks(demoBookmarks);
@@ -889,9 +893,11 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const inContent = b.content.toLowerCase().includes(q);
           const inAuthor = b.author_name.toLowerCase().includes(q) || b.author_username.toLowerCase().includes(q);
           const inSummary = (b.ai_summary || '').toLowerCase().includes(q);
+          const inCategory = (b.ai_category || '').toLowerCase().includes(q);
           const inTopics = (b.topics || []).some((t) => t.toLowerCase().includes(q));
           const inKeywords = (b.keywords || []).some((k) => k.toLowerCase().includes(q));
-          return inContent || inAuthor || inSummary || inTopics || inKeywords;
+          const inConcepts = (b.key_concepts || []).some((concept) => concept.toLowerCase().includes(q));
+          return inContent || inAuthor || inSummary || inCategory || inTopics || inKeywords || inConcepts;
         });
       }
 
@@ -927,13 +933,12 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       connectedAccounts: demoMode ? demoConnectedAccounts : [],
       xStatus,
       syncProgress,
-      subscription: demoMode ? demoSubscription : {
-        user_id: profile.user_id, provider: 'stripe', status: 'active', plan: 'free', current_period_end: '',
-      },
       digestSettings,
       topics,
       bookmarks,
       collections,
+      bookmarksLoadState,
+      collectionsLoadState,
       digests,
       insights,
       rediscoveryCandidates,
@@ -953,6 +958,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       updateCollection,
       deleteCollection,
       toggleBookmarkInCollection,
+      reloadBookmarks,
+      reloadCollections,
       updateProfile,
       updateDigestSettings,
       resetData,
@@ -985,6 +992,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       digestSettings,
       bookmarks,
       collections,
+      bookmarksLoadState,
+      collectionsLoadState,
       digests,
       insights,
       rediscoveryCandidates,
@@ -1003,6 +1012,8 @@ export const DemoStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       updateCollection,
       deleteCollection,
       toggleBookmarkInCollection,
+      reloadBookmarks,
+      reloadCollections,
       updateProfile,
       updateDigestSettings,
       resetData,

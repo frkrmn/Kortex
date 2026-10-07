@@ -59,7 +59,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-semibold text-[15px] tracking-tight text-[#171717]">Kortex</span>
+              <span className="font-semibold text-[15px] tracking-tight text-[#171717]">Find Again</span>
               <span className="text-[10px] uppercase tracking-wider text-[#8A8A85] font-medium ml-1.5 px-1 py-0.5 rounded bg-[#EDEDE9]">
                 Intelligence
               </span>

@@ -31,7 +31,7 @@ export class ResendEmailProvider implements IEmailProvider {
 
   constructor() {
     this.apiKey = process.env.RESEND_API_KEY || '';
-    this.fromEmail = process.env.EMAIL_FROM || 'Recallly Digest <onboarding@resend.dev>';
+    this.fromEmail = process.env.EMAIL_FROM || 'Find Again Digest <onboarding@resend.dev>';
     this.appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
   }
 
@@ -118,7 +118,7 @@ export class EmailService {
    */
   public renderWeeklyDigestEmail(digest: Digest, recipientEmail: string, appUrl: string): { html: string; text: string; subject: string } {
     const periodLabel = escapeHtml(digest.period || digest.title || 'Weekly Digest');
-    const subject = `Your week in Recallly: ${digest.bookmarks_count || digest.bookmarksCount || 0} ideas captured`;
+    const subject = `Your week in Find Again: ${digest.bookmarks_count || digest.bookmarksCount || 0} ideas captured`;
     const cleanAppUrl = appUrl.replace(/\/$/, '');
     const digestUrl = `${cleanAppUrl}/digests/${digest.id}`;
     const unsubscribeUrl = `${cleanAppUrl}/settings?tab=digest&unsubscribe=1`;
@@ -184,7 +184,7 @@ export class EmailService {
           <tr>
             <td>
               <div style="display: inline-flex; align-items: center; gap: 8px;">
-                <span style="font-size: 18px; font-weight: 800; color: #171717; letter-spacing: -0.02em;">Recallly</span>
+                <span style="font-size: 18px; font-weight: 800; color: #171717; letter-spacing: -0.02em;">Find Again</span>
                 <span style="background-color: #EEF2FF; color: #2563EB; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Weekly Digest</span>
               </div>
             </td>
@@ -209,7 +209,7 @@ export class EmailService {
 
         <div style="text-align: center; margin: 32px 0 16px 0;">
           <a href="${digestUrl}" style="display: inline-block; background-color: #171717; color: #FFFFFF; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 10px;">
-            Open Full Digest in Recallly &rarr;
+            Open Full Digest in Find Again &rarr;
           </a>
         </div>
       </td>
@@ -217,7 +217,7 @@ export class EmailService {
 
     <tr>
       <td style="padding: 24px 32px; background-color: #FAFAF8; border-top: 1px solid #F0F0EC; text-align: center; font-size: 11px; color: #8A8A85; line-height: 1.5;">
-        <p style="margin: 0 0 6px 0;">Sent to ${escapeHtml(recipientEmail)} by Recallly AI Knowledge Base.</p>
+        <p style="margin: 0 0 6px 0;">Sent to ${escapeHtml(recipientEmail)} by Find Again AI Knowledge Base.</p>
         <p style="margin: 0;">
           Want to change frequency or stop receiving digests? 
           <a href="${unsubscribeUrl}" style="color: #70706B; text-decoration: underline;">Manage Preferences or Unsubscribe</a>
@@ -230,7 +230,7 @@ export class EmailService {
     `.trim();
 
     const text = `
-Recallly Weekly Digest - ${digest.title}
+Find Again Weekly Digest - ${digest.title}
 ${periodLabel}
 
 ${digest.overview || digest.summary || ''}

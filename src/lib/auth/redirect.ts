@@ -1,6 +1,6 @@
 /**
  * Safe redirect validator to prevent open redirect vulnerabilities.
- * Ensures the 'next' parameter points strictly to an internal relative route within Recallly.
+ * Ensures the 'next' parameter points strictly to an internal relative route within Find Again.
  */
 export function sanitizeRedirectPath(nextPath: string | null | undefined, fallback = '/dashboard'): string {
   if (!nextPath) return fallback;
@@ -30,22 +30,22 @@ export function sanitizeRedirectPath(nextPath: string | null | undefined, fallba
 
     // Don't redirect back to login/signup/auth pages to prevent loops.
     const authPages = ['/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback'];
-    const parsed = new URL(decoded, 'https://recallly.invalid');
-    if (parsed.origin !== 'https://recallly.invalid') return fallback;
+    const parsed = new URL(decoded, 'https://find-again.invalid');
+    if (parsed.origin !== 'https://find-again.invalid') return fallback;
     const pathOnly = parsed.pathname.replace(/\/$/, '') || '/';
     if (authPages.includes(pathOnly)) {
       return fallback;
     }
 
-    // Return destinations are intentionally limited to real Recallly pages.
+    // Return destinations are intentionally limited to real Find Again pages.
     // This prevents callbacks from becoming a trampoline to APIs or future
     // routes that were never designed as post-auth destinations.
     const exactRoutes = new Set([
-      '/', '/dashboard', '/bookmarks', '/collections', '/ask', '/insights',
-      '/digests', '/settings', '/onboarding', '/demo', '/pricing', '/faq',
+      '/', '/dashboard', '/bookmarks', '/collections', '/settings', '/onboarding',
+      '/demo', '/pricing', '/faq',
       '/how-it-works', '/terms', '/privacy',
     ]);
-    const dynamicRoute = /^\/(?:bookmarks|collections|digests)\/[^/]+$/.test(pathOnly)
+    const dynamicRoute = /^\/(?:bookmarks|collections)\/[^/]+$/.test(pathOnly)
       || /^\/demo\/bookmarks\/[^/]+$/.test(pathOnly);
     if (!exactRoutes.has(pathOnly) && !dynamicRoute) return fallback;
 

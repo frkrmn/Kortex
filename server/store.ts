@@ -209,7 +209,7 @@ const INITIAL_BOOKMARKS: Bookmark[] = [
     ai_summary: 'Product onboarding metrics: users must achieve core value within 3-5 minutes or retention drops by 80%. Prioritize instant interactivity over guided tours.',
     topics: ['Product Strategy', 'Growth & Distribution'],
     keywords: ['Onboarding', 'Time-to-Value', 'Retention', 'PLG'],
-    why_saved_insight: 'Checklist for refining the Kortex onboarding flow: minimal forms, immediate bookmark processing, zero dead ends.',
+    why_saved_insight: 'Checklist for refining the Find Again onboarding flow: minimal forms, immediate bookmark processing, zero dead ends.',
     collection_ids: [],
     engagement: { likes: 11200, retweets: 1850, replies: 240 },
   },

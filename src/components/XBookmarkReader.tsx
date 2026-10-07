@@ -109,7 +109,7 @@ export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
               </div>
             </div>
             {!bookmark.thread_fully_available && (
-              <p className="pl-7 text-xs text-[#8A8A85]">Partial conversation. Recallly only shows posts returned by the official X API.</p>
+              <p className="pl-7 text-xs text-[#8A8A85]">Partial conversation. Find Again only shows posts returned by the official X API.</p>
             )}
           </div>
         </details>

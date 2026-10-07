@@ -73,6 +73,9 @@ test('live API requires a verified session and scopes bookmark lookup to its own
         key_concepts: ['Reference'], model: 'gemini-3.5-flash-lite', enriched_at: '2026-01-02T00:00:00Z' }]);
     }
     if (url.pathname === '/rest/v1/collections') {
+      const slug = url.searchParams.get('slug')?.replace(/^eq\./, '');
+      if (slug === 'private-other') return Response.json({ id: 'user-b-private', user_id: 'user-b', name: 'Private', slug, description: '', visibility: 'private', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
+      if (slug === 'public-other') return Response.json({ id: 'user-b-public', user_id: 'user-b', name: 'Public', slug, description: '', visibility: 'public', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' });
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       const id = url.searchParams.get('id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
@@ -144,6 +147,15 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     const ownWrite = response();
     await liveApi(request('/collections/user-a-collection', 'user-a', 'PATCH', { name: 'Renamed' }), ownWrite.res);
     assert.equal(ownWrite.result.code, 200);
+
+    const privateCollection = response();
+    await liveApi(request('/collections/private-other', 'user-a'), privateCollection.res);
+    assert.equal(privateCollection.result.code, 404);
+
+    const publicCollection = response();
+    await liveApi(request('/collections/public-other', 'user-a'), publicCollection.res);
+    assert.equal(publicCollection.result.code, 200);
+    assert.equal((publicCollection.result.body as { visibility: string }).visibility, 'public');
 
     const unconfirmedClear = response();
     await liveApi(request('/data/clear', 'user-b', 'POST'), unconfirmedClear.res);

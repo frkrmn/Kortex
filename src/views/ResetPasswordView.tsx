@@ -55,7 +55,7 @@ export const ResetPasswordView: React.FC = () => {
           <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
             <Layers className="w-5 h-5" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-[#171717]">Recallly</span>
+          <span className="font-bold text-xl tracking-tight text-[#171717]">Find Again</span>
         </div>
 
         {/* Card */}
@@ -88,7 +88,7 @@ export const ResetPasswordView: React.FC = () => {
                   Set new password
                 </h1>
                 <p className="text-xs sm:text-sm text-[#70706B] mt-1.5">
-                  Choose a new password for your Recallly account.
+                  Choose a new password for your Find Again account.
                 </p>
               </div>
 

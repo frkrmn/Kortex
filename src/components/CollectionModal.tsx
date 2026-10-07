@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Globe, FolderKanban } from 'lucide-react';
+import { X, Lock, FolderKanban } from 'lucide-react';
 import { Collection } from '../types';
 
 interface CollectionModalProps {
@@ -17,7 +17,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
 }) => {
   const [name, setName] = useState(editingCollection?.name || '');
   const [description, setDescription] = useState(editingCollection?.description || '');
-  const [visibility, setVisibility] = useState<'private' | 'public'>(editingCollection?.visibility || 'private');
+  const visibility: 'private' | 'public' = editingCollection?.visibility || 'private';
   const [isSaving, setIsSaving] = useState(false);
 
   if (!isOpen) return null;
@@ -93,38 +93,9 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
             <label className="block text-xs font-medium text-[#171717] mb-1.5">
               Visibility
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setVisibility('private')}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left ${
-                  visibility === 'private'
-                    ? 'border-[#171717] bg-[#F7F7F5] text-[#171717]'
-                    : 'border-[#E8E8E5] text-[#70706B] hover:border-[#D0D0CB]'
-                }`}
-              >
-                <Lock className="w-4 h-4 shrink-0" />
-                <div>
-                  <span className="block font-semibold">Private</span>
-                  <span className="text-[10px] text-[#8A8A85]">Only visible to you</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setVisibility('public')}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left ${
-                  visibility === 'public'
-                    ? 'border-[#171717] bg-[#F7F7F5] text-[#171717]'
-                    : 'border-[#E8E8E5] text-[#70706B] hover:border-[#D0D0CB]'
-                }`}
-              >
-                <Globe className="w-4 h-4 shrink-0" />
-                <div>
-                  <span className="block font-semibold">Public</span>
-                  <span className="text-[10px] text-[#8A8A85]">Shareable URL</span>
-                </div>
-              </button>
+            <div className="flex items-center gap-2 rounded-xl border border-[#E8E8E5] bg-[#F7F7F5] p-2.5 text-xs text-[#5C5C58]">
+              <Lock className="h-4 w-4 shrink-0" />
+              <span>{editingCollection ? 'Existing visibility is preserved. Public sharing is not available in the app yet.' : 'New collections are private to your account.'}</span>
             </div>
           </div>
 

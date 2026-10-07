@@ -40,7 +40,7 @@ export const PublicCollectionView: React.FC<PublicCollectionViewProps> = ({
             <div className="w-6 h-6 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs">
               <Layers className="w-3.5 h-3.5" />
             </div>
-            <span className="font-semibold text-xs tracking-tight">Kortex Collection</span>
+            <span className="font-semibold text-xs tracking-tight">Find Again Collection</span>
           </div>
 
           <button
@@ -149,7 +149,7 @@ export const PublicCollectionView: React.FC<PublicCollectionViewProps> = ({
             onClick={onStartOwnLibrary}
             className="px-6 py-2.5 rounded-xl bg-[#FFFFFF] text-[#171717] text-xs font-semibold hover:bg-[#E5E5E0] transition-colors inline-flex items-center gap-2"
           >
-            <span>Start free with Kortex</span>
+            <span>Start free with Find Again</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

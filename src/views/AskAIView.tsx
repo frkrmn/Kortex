@@ -532,7 +532,7 @@ export const AskAIView: React.FC = () => {
                 <div className="space-y-1.5">
                   <h2 className="text-xl font-bold text-[#171717]">Ask your bookmarks</h2>
                   <p className="text-xs text-[#70706B] leading-relaxed">
-                    Recallly retrieves verified excerpts from your saved posts, evaluates evidence, and synthesizes answers strictly backed by citations.
+                    Find Again retrieves verified excerpts from your saved posts, evaluates evidence, and synthesizes answers strictly backed by citations.
                   </p>
                 </div>
 

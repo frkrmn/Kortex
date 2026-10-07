@@ -76,3 +76,8 @@ test('customer-facing retained production surfaces use Find Again branding', () 
   assert.doesNotMatch(retained, /Recallly|KortexMarks|\bKortex\b/);
   assert.match(retained, /Find Again/);
 });
+
+test('disabled Google OAuth is not presented as an available production action', () => {
+  const authViews = read('./views/LoginView.tsx') + read('./views/SignupView.tsx');
+  assert.doesNotMatch(authViews, /Continue with Google|handleGoogleSignIn|signInWithGoogle/);
+});

@@ -83,7 +83,7 @@ function cookieOptions(origin: string) {
     path: CALLBACK_PATH, maxAge: 10 * 60 * 1000 };
 }
 
-function jsonForScript(value: unknown) {
+export function jsonForScript(value: unknown) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 

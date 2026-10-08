@@ -3,9 +3,18 @@ import type { Page } from '@playwright/test';
 
 async function openLibrary(page: Page) {
   await page.goto('/bookmarks');
-  await expect(page.locator('#bookmark-library-view')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('Bookmarks could not be loaded')).toHaveCount(0);
-  await expect(page.getByTestId('bookmark-card').first()).toBeVisible();
+  await expect.poll(async () => {
+    if (new URL(page.url()).pathname === '/login') return 'auth';
+    if (await page.getByRole('heading', { name: 'Bookmarks could not be loaded' }).count()) return 'error';
+    if (await page.locator('#bookmark-library-view').count()) {
+      return await page.getByTestId('bookmark-card').count() ? 'ready' : 'empty';
+    }
+    return 'loading';
+  }, { message: 'Library must load owned bookmarks; auth, API errors, and empty account are distinct failures', timeout: 20_000 }).toBe('ready');
+}
+
+function enrichedCard(page: Page) {
+  return page.locator('[data-testid="bookmark-card"][data-bookmark-category]:not([data-bookmark-category=""])[data-bookmark-topics]:not([data-bookmark-topics=""])').first();
 }
 
 function labelWithoutCount(value: string) {
@@ -20,7 +29,7 @@ test('Home renders real library state without removed fake surfaces', async ({ p
   await page.goto('/dashboard');
   await expect(page.locator('#dashboard-view')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('Bookmarks', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Recently saved')).toBeVisible();
+  await expect(page.getByTestId('bookmark-card').first()).toBeVisible();
   await expect(page.getByText(/Worth Revisiting/i)).toHaveCount(0);
   await expect(page.getByText(/Digest/i)).toHaveCount(0);
   await expect(page.getByText(/↑\s*12%/)).toHaveCount(0);
@@ -49,7 +58,7 @@ test('category filtering is data-driven and internally consistent', async ({ pag
 
 test('topic-only filtering uses a topic from the current library', async ({ page, browserHealth: _health }) => {
   await openLibrary(page);
-  const topics = ((await page.getByTestId('bookmark-card').first().getAttribute('data-bookmark-topics')) || '').split('|').filter(Boolean);
+  const topics = ((await enrichedCard(page).getAttribute('data-bookmark-topics')) || '').split('|').filter(Boolean);
   expect(topics.length, 'the controlled account needs at least one enriched bookmark topic').toBeGreaterThan(0);
   const topic = topics[0];
   await page.goto(`/bookmarks?topic=${encodeURIComponent(topic.toLowerCase())}`);
@@ -66,7 +75,7 @@ test('topic-only filtering uses a topic from the current library', async ({ page
 
 test('category and scoped topic filters compose correctly', async ({ page, browserHealth: _health }) => {
   await openLibrary(page);
-  const firstCard = page.getByTestId('bookmark-card').first();
+  const firstCard = enrichedCard(page);
   const category = await firstCard.getAttribute('data-bookmark-category');
   const topics = ((await firstCard.getAttribute('data-bookmark-topics')) || '').split('|').filter(Boolean);
   expect(category, 'the controlled account needs an enriched bookmark category').toBeTruthy();
@@ -93,10 +102,15 @@ test('category and scoped topic filters compose correctly', async ({ page, brows
 
 test('keyword search finds an existing visible bookmark and clears cleanly', async ({ page, browserHealth: _health }) => {
   await openLibrary(page);
-  const firstCard = page.getByTestId('bookmark-card').first();
-  const cardId = await firstCard.getAttribute('id');
-  const content = (await firstCard.getByTestId('bookmark-content').innerText()).trim();
-  const term = content.match(/[\p{L}\p{N}]{6,}/u)?.[0];
+  const cards = page.getByTestId('bookmark-card');
+  let cardId: string | null = null;
+  let term: string | undefined;
+  for (let index = 0; index < await cards.count(); index += 1) {
+    const candidate = cards.nth(index);
+    const content = (await candidate.getByTestId('bookmark-content').innerText()).trim();
+    term = content.match(/[\p{L}\p{N}]{6,}/u)?.[0];
+    if (term) { cardId = await candidate.getAttribute('id'); break; }
+  }
   expect(cardId).toBeTruthy();
   expect(term, 'a stable keyword should be derivable from a visible bookmark').toBeTruthy();
   await page.getByPlaceholder(/Search text, authors/).fill(term!);
@@ -108,7 +122,9 @@ test('keyword search finds an existing visible bookmark and clears cleanly', asy
 
 test('Reader shows stored content, author, enrichment, and source without opening X', async ({ page, browserHealth: _health }) => {
   await openLibrary(page);
-  await page.getByTestId('bookmark-card').first().getByTestId('bookmark-content').click();
+  const summaryCard = page.getByTestId('bookmark-card').filter({ has: page.getByText('AI Summary', { exact: true }) }).first();
+  await expect(summaryCard).toBeVisible();
+  await summaryCard.getByTestId('bookmark-content').click();
   await expect(page).toHaveURL(/\/bookmarks\/[^/?#]+$/);
   await expect(page.locator('#bookmark-detail-view')).toBeVisible();
   await expect(page.locator('#bookmark-detail-view article')).toBeVisible();
@@ -156,7 +172,7 @@ test('Connected Sources reports status without syncing or reconnecting', async (
   await expect(page.locator('#settings-panel-sources')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'Connected sources' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'X / Twitter' })).toBeVisible();
-  await expect(page.getByText(/Connected|Disconnected/, { exact: true })).toBeVisible();
+  await expect(page.locator('#settings-panel-sources').getByText(/^(Connected|Disconnected)$/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Sync now|Connect X/ })).toBeVisible();
 });
 

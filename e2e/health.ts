@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 
 const PROVIDER_HOSTS = [
   /(^|\.)api\.x\.com$/i,
@@ -18,15 +18,8 @@ function safeLocation(raw: string) {
   }
 }
 
-function sanitizeMessage(value: string) {
-  return value
-    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
-    .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
-    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[redacted-token]')
-    .slice(0, 500);
-}
-
 export class BrowserHealth {
+  private readonly page: Page;
   private readonly baseOrigin: string;
   private readonly pageErrors: string[] = [];
   private readonly consoleErrors: string[] = [];
@@ -35,19 +28,25 @@ export class BrowserHealth {
   private readonly providerActivity: string[] = [];
 
   constructor(page: Page, baseURL: string) {
+    this.page = page;
     this.baseOrigin = new URL(baseURL).origin;
 
-    page.on('pageerror', error => this.pageErrors.push(sanitizeMessage(error.message)));
+    page.on('pageerror', error => this.pageErrors.push(`${error.name || 'Error'} at ${safeLocation(page.url())}`));
     page.on('console', message => {
       if (message.type() !== 'error') return;
       const location = message.location().url;
       if (message.text().includes('Failed to load resource') && location && !location.startsWith(this.baseOrigin)) return;
-      this.consoleErrors.push(sanitizeMessage(message.text()));
+      this.consoleErrors.push(`console error at ${safeLocation(location || page.url())}`);
     });
     page.on('requestfailed', request => {
-      const location = safeLocation(request.url());
-      if (location.startsWith(this.baseOrigin) && !location.endsWith('/favicon.ico')) {
-        this.failedCoreRequests.push(`${request.method()} ${location}`);
+      const url = new URL(request.url());
+      if (url.origin === this.baseOrigin && url.pathname !== '/favicon.ico') {
+        const rawError = request.failure()?.errorText || '';
+        const category = /^net::ERR_[A-Z_]+$/.test(rawError) ? rawError : 'network_error';
+        // A page transition can cancel this background read. The source screen
+        // still has to render its successful status, and HTTP errors remain fatal.
+        if (request.method() === 'GET' && url.pathname === '/api/integrations/x/status' && category === 'net::ERR_ABORTED') return;
+        this.failedCoreRequests.push(`${request.method()} ${url.origin}${url.pathname} ${category}`);
       }
     });
     page.on('response', response => {
@@ -69,22 +68,23 @@ export class BrowserHealth {
 
   async assertClean(testInfo: TestInfo) {
     const result = {
+      test: testInfo.title,
+      route: safeLocation(this.page.url()),
       pageErrors: this.pageErrors,
       consoleErrors: this.consoleErrors,
       failedCoreRequests: this.failedCoreRequests,
       unexpectedApiResponses: this.unexpectedApiResponses,
       providerActivity: this.providerActivity,
     };
-    if (Object.values(result).some(entries => entries.length > 0)) {
+    const failures = Object.entries(result).filter(([, entries]) => Array.isArray(entries) && entries.length > 0);
+    if (testInfo.status !== testInfo.expectedStatus || failures.length) {
       await testInfo.attach('sanitized-browser-health.json', {
         body: Buffer.from(JSON.stringify(result, null, 2)),
         contentType: 'application/json',
       });
     }
-    expect(result.pageErrors, 'uncaught browser page errors').toEqual([]);
-    expect(result.consoleErrors, 'relevant browser console errors').toEqual([]);
-    expect(result.failedCoreRequests, 'failed same-origin application requests').toEqual([]);
-    expect(result.unexpectedApiResponses, 'unexpected application API errors').toEqual([]);
-    expect(result.providerActivity, 'production smoke must not call X, Gemini, Stripe, Resend, or mutation endpoints').toEqual([]);
+    if (failures.length) {
+      throw new Error(`Browser health failed in ${result.test} at ${result.route}: ${failures.map(([kind, entries]) => `${kind}=${(entries as string[]).join(', ')}`).join('; ')}`);
+    }
   }
 }

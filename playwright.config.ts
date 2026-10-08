@@ -14,7 +14,7 @@ export default defineConfig({
   outputDir: 'test-results/grm136',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: isProduction ? 1 : 0,
+  retries: 0,
   workers: isProduction ? 1 : undefined,
   timeout: 30_000,
   expect: { timeout: 10_000 },

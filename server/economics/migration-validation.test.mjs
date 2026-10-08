@@ -27,6 +27,7 @@ await db.exec(sql);
 await db.exec(fs.readFileSync('supabase/migrations/20260920000005_x_bookmark_history_and_compliance.sql','utf8'));
 await db.exec(fs.readFileSync('supabase/migrations/20260921000007_service_role_rpc_claims.sql','utf8'));
 await db.exec(fs.readFileSync('supabase/migrations/20260922000007_rich_x_content_foundation.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20261008000010_fix_provider_budget_rpc_claims.sql','utf8'));
 await db.exec(`SET request.jwt.claim.role = 'service_role'; SET request.jwt.claims = '{"role":"service_role"}'`);
 const one = '00000000-0000-0000-0000-000000000001';
 const two = '00000000-0000-0000-0000-000000000002';
@@ -90,12 +91,33 @@ const unavailable = await db.query(`SELECT content,external_content_status FROM 
 assert.equal(unavailable.rows[0].external_content_status,'deleted');
 assert.match(unavailable.rows[0].content,/no longer available/);
 await assert.rejects(db.query(`UPDATE credit_ledger SET balance_delta=999 WHERE user_id=$1`,[one]));
+for (const signature of [
+  'public.reserve_provider_budget(uuid,text,numeric,numeric,numeric)',
+  'public.settle_provider_budget(uuid,uuid,integer,integer,numeric,text,text,boolean)',
+]) {
+  assert.equal((await db.query(`SELECT has_function_privilege('public',$1,'EXECUTE') AS allowed`,[signature])).rows[0].allowed,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('anon',$1,'EXECUTE') AS allowed`,[signature])).rows[0].allowed,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('authenticated',$1,'EXECUTE') AS allowed`,[signature])).rows[0].allowed,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('service_role',$1,'EXECUTE') AS allowed`,[signature])).rows[0].allowed,true);
+}
+await db.exec(`RESET request.jwt.claim.role; SET request.jwt.claims = ''`);
+await assert.rejects(db.query(`SELECT reserve_provider_budget($1,'x',1,1,1)`,[one]));
+await db.exec(`SET request.jwt.claims = 'not-json'`);
+await assert.rejects(db.query(`SELECT reserve_provider_budget($1,'x',1,1,1)`,[one]));
+await db.exec(`SET request.jwt.claims = '{"role":"authenticated"}'; SET ROLE authenticated`);
+await assert.rejects(db.query(`SELECT reserve_provider_budget($1,'x',1,1,1)`,[one]));
+await db.exec(`RESET ROLE; SET request.jwt.claims = '{"role":"anon"}'; SET ROLE anon`);
+await assert.rejects(db.query(`SELECT reserve_provider_budget($1,'x',1,1,1)`,[one]));
+await db.exec(`RESET ROLE; SET request.jwt.claims = '{"role":"service_role"}'; SET ROLE service_role`);
 const reserve = await db.query(`SELECT reserve_provider_budget($1,'x',1,1,1) AS id`,[one]);
 assert.ok(reserve.rows[0].id);
 assert.equal((await db.query(`SELECT reserve_provider_budget($1,'x',1,1,1) AS id`,[one])).rows[0].id,null);
 await db.query(`SELECT settle_provider_budget($1,$2,10,1,0.1,'test',NULL,false)`,[reserve.rows[0].id,jobId]);
-assert.equal((await db.query(`SELECT resources_read FROM provider_usage_events`)).rows[0].resources_read,10);
-await db.exec(`SET test.user_id = '${one}'; SET ROLE authenticated`);
+await db.query(`SELECT settle_provider_budget($1,$2,10,1,0.1,'test',NULL,false)`,[reserve.rows[0].id,jobId]);
+await db.exec(`RESET ROLE`);
+assert.equal((await db.query(`SELECT count(*)::int AS n FROM provider_usage_events WHERE reservation_id=$1`,[reserve.rows[0].id])).rows[0].n,1);
+assert.equal((await db.query(`SELECT resources_read FROM provider_usage_events WHERE reservation_id=$1`,[reserve.rows[0].id])).rows[0].resources_read,10);
+await db.exec(`SET request.jwt.claims = '{"role":"authenticated"}'; SET test.user_id = '${one}'; SET ROLE authenticated`);
 assert.ok((await db.query(`SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1`,[one])).rows[0].n > 0);
 assert.equal((await db.query(`SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1`,[two])).rows[0].n,0);
 await assert.rejects(db.query(`UPDATE credit_balances SET available_credits=100 WHERE user_id=$1`,[two]));

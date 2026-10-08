@@ -64,8 +64,9 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
           continueImport: req.body?.continueImport === true,
           budgetPreflightBypassed: isXSyncE2ETestUser(user),
         });
-      } catch (error) {
-        console.error('X sync preflight/import failed:', error);
+      } catch {
+        // Do not log provider responses, database details, or credential-bearing errors.
+        console.error(JSON.stringify({ event: 'x_sync_unexpected_failure', category: 'server_exception' }));
         res.status(503).json({ error: 'X sync is temporarily unavailable. Your existing Find Again library is still available.' });
         return;
       }

@@ -28,13 +28,35 @@ test('provider budget applies priority ceilings and the hard cap', async () => {
   try {
     assert.equal((await ProviderBudgetService.canPerformOperation('user-a', 1, 'automatic')).allowed, true);
     spend = 80;
-    assert.equal((await ProviderBudgetService.canPerformOperation('user-a', 1, 'free_manual')).allowed, false);
+    const denied = await ProviderBudgetService.canPerformOperation('user-a', 1, 'free_manual');
+    assert.equal(denied.allowed, false);
+    assert.equal(denied.category, 'budget_limit_reached');
     assert.equal((await ProviderBudgetService.canPerformOperation('user-a', 1, 'automatic')).allowed, true);
     assert.equal((await ProviderBudgetService.canPerformOperation('user-a', 1, 'paid_manual')).allowed, true);
     assert.equal(await ProviderBudgetService.reserve('user-a', 1, 'free_manual'), null);
     assert.equal(reservations, 0);
     spend = 100;
     assert.equal((await ProviderBudgetService.canPerformOperation('user-a', 1, 'paid_manual')).allowed, false);
+  } finally {
+    globalThis.fetch = oldFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name]; else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('missing X commercial configuration fails closed before any provider or database request', async () => {
+  const names = ['X_POST_READ_ESTIMATED_COST', 'X_PRICING_VERSION', 'X_API_MONTHLY_BUDGET', 'X_API_USER_MONTHLY_BUDGET'] as const;
+  const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  const oldFetch = globalThis.fetch;
+  for (const name of names) delete process.env[name];
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };
+  try {
+    const result = await ProviderBudgetService.canPerformOperation('fake-user', 1, 'free_manual');
+    assert.equal(result.allowed, false);
+    assert.equal(result.category, 'configuration_missing');
+    assert.equal(requests, 0);
   } finally {
     globalThis.fetch = oldFetch;
     for (const name of names) {

@@ -48,7 +48,8 @@ export class ProviderBudgetService {
   static async canPerformOperation(userId: string, expectedResources: number, priority: 'paid_manual'|'free_manual'|'automatic'|'opportunistic') {
     const config = importConfig().x;
     if (!config.unitCost || !config.monthlyBudget || !config.userMonthlyBudget || config.pricingVersion === 'unconfigured')
-      return { allowed: false, reason: 'X sync is temporarily unavailable. Your existing Find Again library is still available.' };
+      return { allowed: false, category: 'configuration_missing' as const,
+        reason: 'X sync is temporarily unavailable. Your existing Find Again library is still available.' };
     const [global, user] = await Promise.all([this.getMonthlySpend('x'), this.getMonthlySpend('x', userId)]);
     const estimated = this.estimateOperationCost(expectedResources);
     const hard = config.monthlyBudget * Math.min(config.hardPercent, this.priorityLimitPercent(priority)) / 100;
@@ -57,7 +58,8 @@ export class ProviderBudgetService {
     // At warning level, retain budget for user-initiated work.
     const warning = global.spend >= config.monthlyBudget * config.warningPercent / 100;
     if (warning) console.warn('[ProviderBudget] X budget warning threshold reached.');
-    return { allowed: globalAfter <= hard && userAfter <= config.userMonthlyBudget,
+    const allowed = globalAfter <= hard && userAfter <= config.userMonthlyBudget;
+    return { allowed, category: allowed ? null : 'budget_limit_reached' as const,
       reason: 'X sync is temporarily unavailable. Your existing Find Again library is still available.',
       global, user, estimated, warning };
   }

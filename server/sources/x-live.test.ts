@@ -349,10 +349,19 @@ test('X OAuth state is bound to one browser and one user and cannot be replayed'
     providerTweets = [{ id: 'e2e-bypass', text: 'Controlled provider request', author_id: 'x-user-1' }];
     savedAccount!.last_sync_at = new Date(Date.now() - 10 * 60_000).toISOString();
     const requestsBeforeBlockedUser = xRequests;
-    const blockedByMissingBudget = await syncLiveX('user-a');
+    const originalWarn = console.warn;
+    const preflightWarnings: string[] = [];
+    console.warn = message => { preflightWarnings.push(String(message)); };
+    let blockedByMissingBudget;
+    try { blockedByMissingBudget = await syncLiveX('user-a'); }
+    finally { console.warn = originalWarn; }
     assert.equal(blockedByMissingBudget.success, false);
     assert.equal(blockedByMissingBudget.statusCode, 503);
     assert.equal(xRequests, requestsBeforeBlockedUser);
+    assert.deepEqual(JSON.parse(preflightWarnings[0]), {
+      event: 'x_sync_preflight_denied', category: 'configuration_missing',
+      priority: 'free_manual', initialImport: false,
+    });
 
     // The internal flag reaches the real provider layer and preserves usage accounting.
     const allowedE2E = await syncLiveX('user-a', { limit: 1, budgetPreflightBypassed: true });

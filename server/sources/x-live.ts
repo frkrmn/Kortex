@@ -230,7 +230,11 @@ export async function syncLiveX(userId: string, options: XSyncOptions = {}, depe
   const budgetPreflightBypassed = options.budgetPreflightBypassed === true;
   if (!budgetPreflightBypassed) {
     const preflight = await ProviderBudgetService.canPerformOperation(userId, firstPageSize, priority);
-    if (!preflight.allowed) return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
+    if (!preflight.allowed) {
+      console.warn(JSON.stringify({ event: 'x_sync_preflight_denied', category: preflight.category,
+        priority, initialImport: isInitialImport }));
+      return { success: false, addedCount: 0, discoveredCount: 0, items: [], statusCode: 503, error: preflight.reason };
+    }
   } else {
     console.info(JSON.stringify({ event: 'x_sync_e2e_test', userId, budgetPreflightBypassed: true,
       providerRequestAttempted: false, providerStatus: null, resourcesRead: 0 }));

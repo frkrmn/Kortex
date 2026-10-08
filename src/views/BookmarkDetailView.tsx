@@ -17,6 +17,7 @@ import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { XBookmarkReader } from '../components/XBookmarkReader';
+import { enrichmentStatusPresentation } from '../lib/enrichment-status';
 
 export const BookmarkDetailView: React.FC = () => {
   const { params, navigate } = useRouter();
@@ -61,6 +62,8 @@ export const BookmarkDetailView: React.FC = () => {
   }
 
   const relatedBookmarks = getRelatedBookmarks(bookmark.id, 3);
+  const enrichmentPresentation = bookmark.enrichment_status === 'pending' || bookmark.enrichment_status === 'processing'
+    ? enrichmentStatusPresentation(bookmark.enrichment_status) : null;
 
   const formattedImportDate = new Date(bookmark.imported_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -164,11 +167,11 @@ export const BookmarkDetailView: React.FC = () => {
             {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
               <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">
                 <div className="flex items-center gap-2 font-medium">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
-                  <span>Enrichment in progress</span>
+                  <Sparkles className={`w-3.5 h-3.5 text-indigo-600 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
+                  <span>{enrichmentPresentation?.title}</span>
                 </div>
                 <p className="text-[11px] text-indigo-700">
-                  Synthesizing content and classifying canonical topics...
+                  {enrichmentPresentation?.detail}
                 </p>
               </div>
             )}
@@ -189,7 +192,7 @@ export const BookmarkDetailView: React.FC = () => {
             )}
 
             <p className="text-xs leading-relaxed text-[#383834]">
-              {bookmark.ai_summary || (bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending' ? 'AI · Organizing...' : 'No AI summary generated yet.')}
+              {bookmark.ai_summary || enrichmentPresentation?.summary || 'No AI summary generated yet.'}
             </p>
             {bookmark.ai_category && <p className="text-xs text-[#595954]">Category · <span className="font-semibold">{bookmark.ai_category}</span></p>}
 

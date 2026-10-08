@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Bookmark, Collection } from '../types';
+import { enrichmentStatusPresentation } from '../lib/enrichment-status';
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -47,6 +48,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   const mediaItem = bookmark.media && bookmark.media.length > 0 ? bookmark.media[0] : null;
   const unavailableOnX = bookmark.source === 'twitter' && bookmark.external_content_status && bookmark.external_content_status !== 'available';
+  const enrichmentPresentation = bookmark.enrichment_status === 'pending' || bookmark.enrichment_status === 'processing'
+    ? enrichmentStatusPresentation(bookmark.enrichment_status) : null;
 
   if (variant === 'compact') {
     return (
@@ -258,10 +261,10 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           {/* AI Processing State Skeleton / Banner */}
           {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100/80 text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0 animate-pulse" />
+              <Sparkles className={`w-3.5 h-3.5 text-indigo-600 shrink-0 ${enrichmentPresentation?.busy ? 'animate-pulse' : ''}`} />
               <div className="flex-1 min-w-0">
                 <span className="text-[11px] font-medium text-indigo-700">
-                  AI Analyzing post & classifying topics...
+                  {enrichmentPresentation?.detail}
                 </span>
               </div>
             </div>
@@ -277,7 +280,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             </div>
           )}
           {(bookmark.enrichment_status === 'pending' || bookmark.enrichment_status === 'processing') && !bookmark.ai_summary && (
-            <span className="text-[11px] text-[#70706B]">AI · Organizing...</span>
+            <span className="text-[11px] text-[#70706B]">{enrichmentPresentation?.summary}</span>
           )}
 
           {/* AI Key Insight Card */}

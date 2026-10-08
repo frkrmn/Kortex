@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Bookmark, Collection } from '../types';
 import { api } from '../lib/api';
+import { enrichmentStatusPresentation } from '../lib/enrichment-status';
 
 interface BookmarkDetailModalProps {
   bookmark: Bookmark | null;
@@ -56,6 +57,8 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
   }, [bookmark]);
 
   if (!bookmark) return null;
+  const enrichmentPresentation = bookmark.enrichment_status === 'pending' || bookmark.enrichment_status === 'processing'
+    ? enrichmentStatusPresentation(bookmark.enrichment_status) : null;
 
   const handleReprocess = async () => {
     if (!bookmark) return;
@@ -182,11 +185,11 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
             {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
               <div className="p-3 rounded-lg bg-indigo-100/50 border border-indigo-200/70 text-xs text-indigo-900 space-y-2">
                 <div className="flex items-center gap-2 font-medium">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
-                  <span>Enrichment pipeline in progress</span>
+                  <Sparkles className={`w-3.5 h-3.5 text-indigo-600 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
+                  <span>{enrichmentPresentation?.title}</span>
                 </div>
                 <p className="text-[11px] text-indigo-700">
-                  Extracting key takeaways, detecting language, generating keywords, and classifying topics via background queue.
+                  {enrichmentPresentation?.detail}
                 </p>
               </div>
             )}

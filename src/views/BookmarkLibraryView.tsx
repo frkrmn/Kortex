@@ -13,6 +13,7 @@ import { useDemoStore } from '../lib/store/demo-store';
 import { BookmarkCard } from '../components/BookmarkCard';
 import { ENRICHMENT_CATEGORIES } from '../config/enrichment';
 import { categoryCounts, filterEnrichedBookmarks, isEnrichmentCategory, topicCounts, visibleTopicOptions } from '../lib/enrichment-filters';
+import { enrichmentStatusPresentation } from '../lib/enrichment-status';
 
 export const BookmarkLibraryView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
@@ -96,6 +97,7 @@ export const BookmarkLibraryView: React.FC = () => {
   const pendingCount = bookmarks.filter(
     (b) => !b.ai_summary || b.enrichment_status === 'pending' || b.enrichment_status === 'failed'
   ).length;
+  const enrichmentPresentation = enrichmentStatusPresentation(enrichmentStatus.activeCount > 0 ? 'processing' : 'pending');
 
   if (bookmarksLoadState === 'loading') {
     return <div className="py-20 text-center text-sm text-[#70706B]" role="status">Loading your bookmarks…</div>;
@@ -162,10 +164,10 @@ export const BookmarkLibraryView: React.FC = () => {
       {(enrichmentStatus.isProcessing || enrichmentStatus.pendingCount > 0) && (
         <div className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-xs text-indigo-950 shadow-2xs animate-in fade-in duration-200">
           <div className="flex items-center gap-3 min-w-0">
-            <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 animate-spin" />
+            <Sparkles className={`w-4 h-4 text-indigo-600 shrink-0 ${enrichmentPresentation.busy ? 'animate-spin' : ''}`} />
             <div className="min-w-0">
               <span className="font-semibold block text-indigo-900">
-                AI Enrichment in progress
+                {enrichmentPresentation.title}
               </span>
               <span className="text-[11px] text-indigo-700">
                 {enrichmentStatus.activeCount} active • {enrichmentStatus.pendingCount} queued • {enrichmentStatus.completedCount} completed

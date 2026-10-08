@@ -14,7 +14,11 @@
     "test:economics": "node --import tsx --test server/live-api.test.ts server/sources/x-content.test.ts server/sources/x-live.test.ts server/sources/x-e2e-allowlist.test.ts server/economics/provider-budget.test.ts server/economics/smart-sync.test.ts server/economics/demo-isolation.test.ts src/components/XBookmarkReader.test.tsx src/lib/bookmark-order.test.ts && node server/economics/migration-validation.test.mjs",
     "test:settings": "node --import tsx --test src/lib/settings.test.ts src/components/settings-production.test.ts server/live-api.test.ts",
     "test:grm131": "node --import tsx --test src/grm131-public-demo.test.ts src/landing-typography.test.ts",
-    "test:grm134": "node --import tsx --test src/lib/auth/redirect.test.ts src/lib/auth/session-lifecycle.test.ts src/auth-production.test.ts server/config/trust-proxy.test.ts server/live-api.test.ts src/grm131-public-demo.test.ts"
+    "test:grm134": "node --import tsx --test src/lib/auth/redirect.test.ts src/lib/auth/session-lifecycle.test.ts src/auth-production.test.ts server/config/trust-proxy.test.ts server/live-api.test.ts src/grm131-public-demo.test.ts",
+    "test:e2e": "npm run build && VITE_DEMO_MODE=false E2E_BASE_URL=http://127.0.0.1:3000 playwright test",
+    "test:e2e:unauthenticated": "npm run build && VITE_DEMO_MODE=false E2E_BASE_URL=http://127.0.0.1:3000 playwright test --project=unauthenticated",
+    "test:e2e:production": "E2E_MODE=production playwright test",
+    "test:e2e:production:unauthenticated": "E2E_MODE=production playwright test --project=unauthenticated"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -36,6 +40,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.55.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",

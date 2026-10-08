@@ -52,6 +52,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     return (
       <div
         id={`bookmark-compact-${bookmark.id}`}
+        data-testid="bookmark-card"
+        data-bookmark-category={bookmark.ai_category || ''}
+        data-bookmark-topics={(bookmark.topics || []).join('|')}
         onClick={() => onOpenDetail(bookmark)}
         className="group relative bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D0D0CB] rounded-xl p-3 transition-all hover:shadow-2xs cursor-pointer flex items-center justify-between gap-3"
       >
@@ -68,7 +71,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <span className="text-[10px] text-[#8A8A85]">@{bookmark.author_username}</span>
               <span className="text-[10px] text-[#8A8A85]">• {formattedDate}</span>
             </div>
-            <p className="text-xs text-[#52524E] truncate mt-0.5">{bookmark.content}</p>
+            <p data-testid="bookmark-content" className="text-xs text-[#52524E] truncate mt-0.5">{bookmark.content}</p>
           </div>
         </div>
 
@@ -96,6 +99,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   return (
     <div
       id={`bookmark-item-${bookmark.id}`}
+      data-testid="bookmark-card"
+      data-bookmark-category={bookmark.ai_category || ''}
+      data-bookmark-topics={(bookmark.topics || []).join('|')}
       className="group relative bg-[#FFFFFF] border border-[#E8E8E5] hover:border-[#D5D5CF] rounded-xl p-4 sm:p-5 transition-all hover:shadow-xs flex flex-col justify-between"
     >
       <div>
@@ -232,7 +238,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           onClick={() => onOpenDetail(bookmark)}
           className="cursor-pointer space-y-3 mb-4"
         >
-          <p className="text-[13px] text-[#242422] leading-relaxed line-clamp-4 font-normal whitespace-pre-line">
+          <p data-testid="bookmark-content" className="text-[13px] text-[#242422] leading-relaxed line-clamp-4 font-normal whitespace-pre-line">
             {bookmark.content}
           </p>
 

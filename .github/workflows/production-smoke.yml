@@ -1,0 +1,36 @@
+name: Production browser smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed Find Again origin
+        required: true
+        default: https://kortexmarks.vercel.app
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-smoke
+    env:
+      E2E_MODE: production
+      E2E_BASE_URL: ${{ inputs.base_url }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Validate smoke secrets
+        run: |
+          test -n "$E2E_USER_EMAIL"
+          test -n "$E2E_USER_PASSWORD"
+      - run: npm run test:e2e:production

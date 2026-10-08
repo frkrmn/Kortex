@@ -4,6 +4,7 @@ import { parseGeminiEnrichment, geminiInputParts, GEMINI_ENRICHMENT_INSTRUCTION,
 import { enrichmentControls, isControlledEnrichmentOwner } from './live-gemini-enrichment';
 
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const allowedOwner = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const enabled = {
   GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
   GEMINI_ENRICHMENT_OWNER_USER_ID: owner, GEMINI_ENRICHMENT_ROLLOUT_CAP: '20', GEMINI_API_KEY: 'unit-test',
@@ -48,6 +49,22 @@ test('controlled rollout fails closed for absent config and any other user', () 
   assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_ENABLED: 'false' }).providerEnabled, false);
   assert.equal(enrichmentControls({ ...enabled, GEMINI_API_KEY: undefined }).apiKeyConfigured, false);
   assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_BATCH_SIZE: '999' }).batchSize, 20);
+});
+
+test('controlled rollout accepts exact valid allowlist UUIDs and preserves the legacy owner', () => {
+  const allowlisted = {
+    ...enabled,
+    GEMINI_ENRICHMENT_ALLOWED_USER_IDS: ` ${allowedOwner.toUpperCase()},invalid,${allowedOwner} `,
+  };
+  assert.equal(isControlledEnrichmentOwner(owner, allowlisted), true);
+  assert.equal(isControlledEnrichmentOwner(allowedOwner, allowlisted), true);
+  assert.equal(isControlledEnrichmentOwner('cccccccc-cccc-4ccc-8ccc-cccccccccccc', allowlisted), false);
+  assert.equal(isControlledEnrichmentOwner(allowedOwner.slice(0, -1), allowlisted), false);
+  assert.deepEqual(enrichmentControls(allowlisted).ownerIds, [owner, allowedOwner]);
+  assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_OWNER_USER_ID: '',
+    GEMINI_ENRICHMENT_ALLOWED_USER_IDS: allowedOwner }).queueEnabled, true);
+  assert.equal(enrichmentControls({ ...enabled, GEMINI_ENRICHMENT_OWNER_USER_ID: '',
+    GEMINI_ENRICHMENT_ALLOWED_USER_IDS: 'invalid,also-invalid' }).queueEnabled, false);
 });
 
 test('multimodal input uses only persisted public X image metadata', () => {

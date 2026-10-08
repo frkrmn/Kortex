@@ -14,10 +14,14 @@ function boundedInt(value: string | undefined, fallback: number, maximum: number
 }
 
 export function enrichmentControls(env: NodeJS.ProcessEnv = process.env) {
-  const ownerId = env.GEMINI_ENRICHMENT_OWNER_USER_ID;
-  const normalizedOwnerId = ownerId && UUID.test(ownerId) ? ownerId.toLowerCase() : null;
+  const legacyOwnerId = env.GEMINI_ENRICHMENT_OWNER_USER_ID;
+  const normalizedLegacyOwnerId = legacyOwnerId && UUID.test(legacyOwnerId) ? legacyOwnerId.toLowerCase() : null;
+  const ownerIds = [...new Set([
+    ...(normalizedLegacyOwnerId ? [normalizedLegacyOwnerId] : []),
+    ...(env.GEMINI_ENRICHMENT_ALLOWED_USER_IDS || '').split(',').map(value => value.trim().toLowerCase()).filter(value => UUID.test(value)),
+  ])];
   const rolloutCap = boundedInt(env.GEMINI_ENRICHMENT_ROLLOUT_CAP, 0, 10000);
-  const queueEnabled = Boolean(normalizedOwnerId) && rolloutCap > 0;
+  const queueEnabled = ownerIds.length > 0 && rolloutCap > 0;
   const providerFlagEnabled = env.GEMINI_ENRICHMENT_ENABLED === 'true';
   const freeTierConfirmed = env.GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED === 'true';
   const apiKeyConfigured = Boolean(env.GEMINI_API_KEY);
@@ -29,7 +33,8 @@ export function enrichmentControls(env: NodeJS.ProcessEnv = process.env) {
     providerFlagEnabled,
     freeTierConfirmed,
     apiKeyConfigured,
-    ownerId: normalizedOwnerId,
+    ownerId: normalizedLegacyOwnerId || ownerIds[0] || null,
+    ownerIds,
     batchSize: boundedInt(env.GEMINI_ENRICHMENT_BATCH_SIZE, 5, 20),
     concurrency: boundedInt(env.GEMINI_ENRICHMENT_CONCURRENCY, 1, 2),
     rolloutCap,
@@ -38,7 +43,7 @@ export function enrichmentControls(env: NodeJS.ProcessEnv = process.env) {
 
 export function isControlledEnrichmentOwner(userId: string, env: NodeJS.ProcessEnv = process.env) {
   const controls = enrichmentControls(env);
-  return controls.queueEnabled && controls.ownerId === userId.toLowerCase();
+  return UUID.test(userId) && controls.queueEnabled && controls.ownerIds.includes(userId.toLowerCase());
 }
 
 export async function enqueueOwnedNewBookmarks(userId: string, savedItemIds: string[]) {
@@ -49,7 +54,7 @@ export async function enqueueOwnedNewBookmarks(userId: string, savedItemIds: str
       reason: controls.ownerId ? 'controlled_owner_mismatch' : 'controlled_owner_not_configured' }));
     return 0;
   }
-  const ownerId = enrichmentControls().ownerId!;
+  const ownerId = userId.toLowerCase();
   const db = economicsAdmin();
   const uniqueIds = [...new Set(savedItemIds)];
   const { data: owned, error: ownershipError } = await db.from('saved_items')
@@ -71,27 +76,28 @@ export async function enqueueOwnedNewBookmarks(userId: string, savedItemIds: str
 }
 
 /** Queues a bounded owner-only slice of existing records. Safe to resume. */
-export async function queueControlledBackfill(limit?: number) {
+export async function queueControlledBackfill(limit?: number, requestedOwnerId?: string) {
   const controls = enrichmentControls();
-  if (!controls.queueEnabled || !controls.ownerId || !controls.rolloutCap) {
+  const ownerId = (requestedOwnerId || controls.ownerId || '').toLowerCase();
+  if (!controls.queueEnabled || !controls.rolloutCap || !isControlledEnrichmentOwner(ownerId)) {
     throw new Error('Controlled Gemini enrichment owner is not configured.');
   }
   const db = economicsAdmin();
   const requested = Math.min(limit ?? controls.batchSize, controls.batchSize);
   const { data: existing, error: existingError } = await db.from('saved_item_enrichments')
-    .select('saved_item_id').eq('user_id', controls.ownerId)
+    .select('saved_item_id').eq('user_id', ownerId)
     .eq('prompt_version', GEMINI_PROMPT_VERSION).eq('schema_version', GEMINI_SCHEMA_VERSION);
   if (existingError) throw existingError;
   const used = new Set((existing || []).map(row => row.saved_item_id));
   const { data: items, error } = await db.from('saved_items').select('id,user_id,source,external_content_status')
-    .eq('user_id', controls.ownerId).eq('source', 'twitter').order('saved_at', { ascending: false }).limit(1000);
+    .eq('user_id', ownerId).eq('source', 'twitter').order('saved_at', { ascending: false }).limit(1000);
   if (error) throw error;
   const remaining = Math.max(0, controls.rolloutCap - used.size);
-  const candidates = (items || []).filter(item => item.user_id === controls.ownerId && item.source === 'twitter'
+  const candidates = (items || []).filter(item => item.user_id === ownerId && item.source === 'twitter'
     && !used.has(item.id)
     && !['unavailable', 'deleted', 'restricted'].includes(item.external_content_status || 'available'))
     .slice(0, Math.min(requested, remaining));
-  return enqueueOwnedNewBookmarks(controls.ownerId, candidates.map(item => item.id));
+  return enqueueOwnedNewBookmarks(ownerId, candidates.map(item => item.id));
 }
 
 export type EnrichmentRunStats = {
@@ -169,12 +175,13 @@ async function processClaim(ai: GoogleGenAI, userId: string, rolloutCap: number,
 }
 
 /** Drains a bounded batch. No user-controlled ID or public route reaches this. */
-export async function runControlledGeminiEnrichment(limit?: number): Promise<EnrichmentRunStats> {
+export async function runControlledGeminiEnrichment(limit?: number, requestedOwnerId?: string): Promise<EnrichmentRunStats> {
   const controls = enrichmentControls();
-  if (!controls.enabled || !controls.ownerId || !controls.rolloutCap) throw new Error('Controlled Gemini enrichment is disabled.');
+  const ownerId = (requestedOwnerId || controls.ownerId || '').toLowerCase();
+  if (!controls.enabled || !controls.rolloutCap || !isControlledEnrichmentOwner(ownerId)) throw new Error('Controlled Gemini enrichment is disabled.');
   const db = economicsAdmin();
   const { count, error } = await db.from('saved_item_enrichments').select('id', { count: 'exact', head: true })
-    .eq('user_id', controls.ownerId).eq('prompt_version', GEMINI_PROMPT_VERSION)
+    .eq('user_id', ownerId).eq('prompt_version', GEMINI_PROMPT_VERSION)
     .eq('schema_version', GEMINI_SCHEMA_VERSION).eq('status', 'completed');
   if (error) throw error;
   const remaining = Math.max(0, controls.rolloutCap - (count || 0));
@@ -187,14 +194,14 @@ export async function runControlledGeminiEnrichment(limit?: number): Promise<Enr
   const staleBefore = new Date(Date.now() - 20 * 60_000).toISOString();
   const { error: staleError } = await db.from('saved_item_enrichments')
     .update({ status: 'failed', error_code: 'worker_interrupted', next_attempt_at: new Date().toISOString() })
-    .eq('user_id', controls.ownerId).eq('status', 'processing').lt('updated_at', staleBefore);
+    .eq('user_id', ownerId).eq('status', 'processing').lt('updated_at', staleBefore);
   if (staleError) throw staleError;
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY!, httpOptions: { timeout: 90_000 } });
   // The conservative default is serial; a controlled override permits two workers.
   let reserved = 0;
   const workers = Array.from({ length: Math.min(requested, controls.concurrency) }, async () => {
     while (reserved++ < requested) {
-      const found = await processClaim(ai, controls.ownerId!, controls.rolloutCap, stats);
+      const found = await processClaim(ai, ownerId, controls.rolloutCap, stats);
       if (!found) break;
     }
   });
@@ -207,8 +214,8 @@ export async function runControlledGeminiEnrichment(limit?: number): Promise<Enr
  * successful bookmark write, then processes the normal bounded worker batch.
  */
 type ScheduledEnrichmentDependencies = {
-  queue: typeof queueControlledBackfill;
-  run: typeof runControlledGeminiEnrichment;
+  queue: (limit?: number, ownerId?: string) => Promise<number>;
+  run: (limit?: number, ownerId?: string) => Promise<EnrichmentRunStats>;
 };
 
 const scheduledEnrichmentDependencies: ScheduledEnrichmentDependencies = {
@@ -218,7 +225,7 @@ const scheduledEnrichmentDependencies: ScheduledEnrichmentDependencies = {
 
 export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrichmentDependencies = scheduledEnrichmentDependencies) {
   const controls = enrichmentControls();
-  if (!controls.queueEnabled || !controls.ownerId || !controls.rolloutCap) {
+  if (!controls.queueEnabled || !controls.ownerIds.length || !controls.rolloutCap) {
     console.info(JSON.stringify({ event: 'gemini_scheduled_run', queueEnabled: false, providerEnabled: controls.providerEnabled,
       providerFlagEnabled: controls.providerFlagEnabled, freeTierConfirmed: controls.freeTierConfirmed,
       apiKeyConfigured: controls.apiKeyConfigured,
@@ -226,29 +233,49 @@ export async function runScheduledGeminiEnrichment(dependencies: ScheduledEnrich
     return { enabled: false, queued: 0, attempted: 0, completed: 0, failed: 0, retries: 0,
       inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
   }
-  const queued = await dependencies.queue();
+  let queued = 0;
+  let remainingBatch = controls.batchSize;
+  const allocations = controls.ownerIds.slice(0, controls.batchSize).map((ownerId, index, owners) => {
+    const allocation = Math.max(1, Math.floor(remainingBatch / (owners.length - index)));
+    remainingBatch -= allocation;
+    return { ownerId, allocation };
+  });
+  for (const { ownerId, allocation } of allocations) queued += await dependencies.queue(allocation, ownerId);
   if (!controls.enabled) {
-    console.info(JSON.stringify({ event: 'gemini_scheduled_run', userId: controls.ownerId, queueEnabled: true,
+    console.info(JSON.stringify({ event: 'gemini_scheduled_run', authorizedOwnerCount: controls.ownerIds.length, queueEnabled: true,
       providerEnabled: false, providerFlagEnabled: controls.providerFlagEnabled,
       freeTierConfirmed: controls.freeTierConfirmed, apiKeyConfigured: controls.apiKeyConfigured,
       queued, attempted: 0, completed: 0, reason: 'provider_disabled' }));
     return { enabled: false, queued, attempted: 0, completed: 0, failed: 0, retries: 0,
       inputTokens: 0, outputTokens: 0, categories: {} as Record<string, number> };
   }
-  const result = await dependencies.run();
-  console.info(JSON.stringify({ event: 'gemini_scheduled_run', userId: controls.ownerId, queueEnabled: true,
+  const result: EnrichmentRunStats = { attempted: 0, completed: 0, failed: 0, retries: 0,
+    inputTokens: 0, outputTokens: 0, categories: {} };
+  for (const { ownerId, allocation } of allocations) {
+    const ownerResult = await dependencies.run(allocation, ownerId);
+    result.attempted += ownerResult.attempted;
+    result.completed += ownerResult.completed;
+    result.failed += ownerResult.failed;
+    result.retries += ownerResult.retries;
+    result.inputTokens += ownerResult.inputTokens;
+    result.outputTokens += ownerResult.outputTokens;
+    for (const [category, count] of Object.entries(ownerResult.categories))
+      result.categories[category] = (result.categories[category] || 0) + count;
+  }
+  console.info(JSON.stringify({ event: 'gemini_scheduled_run', authorizedOwnerCount: controls.ownerIds.length, queueEnabled: true,
     providerEnabled: true, queued, attempted: result.attempted, completed: result.completed,
     failed: result.failed, retries: result.retries }));
   return { enabled: true, queued, ...result };
 }
 
-export async function controlledEnrichmentStats() {
+export async function controlledEnrichmentStats(requestedOwnerId?: string) {
   const controls = enrichmentControls();
-  if (!controls.ownerId) throw new Error('Controlled owner is not configured.');
+  const ownerId = (requestedOwnerId || controls.ownerId || '').toLowerCase();
+  if (!isControlledEnrichmentOwner(ownerId)) throw new Error('Controlled owner is not configured.');
   const db = economicsAdmin();
   const [items, results] = await Promise.all([
-    db.from('saved_items').select('id', { count: 'exact', head: true }).eq('user_id', controls.ownerId),
-    db.from('saved_item_enrichments').select('status,category').eq('user_id', controls.ownerId)
+    db.from('saved_items').select('id', { count: 'exact', head: true }).eq('user_id', ownerId),
+    db.from('saved_item_enrichments').select('status,category').eq('user_id', ownerId)
       .eq('prompt_version', GEMINI_PROMPT_VERSION).eq('schema_version', GEMINI_SCHEMA_VERSION),
   ]);
   if (items.error || results.error) throw items.error || results.error;

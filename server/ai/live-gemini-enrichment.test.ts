@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { enqueueOwnedNewBookmarks, queueControlledBackfill, runScheduledGeminiEnrichment } from './live-gemini-enrichment';
+import { enqueueOwnedNewBookmarks, queueControlledBackfill, runControlledGeminiEnrichment,
+  runScheduledGeminiEnrichment } from './live-gemini-enrichment';
 
 test('new owned bookmark is queued once; other users cannot enqueue it', async () => {
   const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
-    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY',
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY',
     'VITE_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const previousFetch = globalThis.fetch;
@@ -52,9 +54,11 @@ test('new owned bookmark is queued once; other users cannot enqueue it', async (
 });
 
 test('reconciliation discovers a missing owned row and remains idempotent', async () => {
-  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const legacyOwner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const owner = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
-    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY',
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY',
     'VITE_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const previousFetch = globalThis.fetch;
@@ -63,7 +67,9 @@ test('reconciliation discovers a missing owned row and remains idempotent', asyn
   try {
     Object.assign(process.env, {
       GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
-      GEMINI_ENRICHMENT_OWNER_USER_ID: owner, GEMINI_ENRICHMENT_ROLLOUT_CAP: '20',
+      GEMINI_ENRICHMENT_OWNER_USER_ID: legacyOwner,
+      GEMINI_ENRICHMENT_ALLOWED_USER_IDS: `${legacyOwner},${owner}`,
+      GEMINI_ENRICHMENT_ROLLOUT_CAP: '20',
       GEMINI_API_KEY: 'unit-test', VITE_SUPABASE_URL: 'http://127.0.0.1:39999',
       SUPABASE_SERVICE_ROLE_KEY: 'unit-test-service-role',
     });
@@ -81,7 +87,7 @@ test('reconciliation discovers a missing owned row and remains idempotent', asyn
         return Response.json([
           { id: 'missing-owned', user_id: owner, source: 'twitter', external_content_status: 'available' },
           { id: 'already-enriched', user_id: owner, source: 'twitter', external_content_status: 'available' },
-          { id: 'wrong-owner', user_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', source: 'twitter', external_content_status: 'available' },
+          { id: 'wrong-owner', user_id: legacyOwner, source: 'twitter', external_content_status: 'available' },
         ]);
       }
       if (url.pathname === '/rest/v1/saved_item_enrichments' && init?.method === 'POST') {
@@ -93,8 +99,8 @@ test('reconciliation discovers a missing owned row and remains idempotent', asyn
       }
       throw new Error(`Unexpected API path: ${url.pathname}`);
     };
-    assert.equal(await queueControlledBackfill(20), 1);
-    assert.equal(await queueControlledBackfill(20), 0);
+    assert.equal(await queueControlledBackfill(20, owner), 1);
+    assert.equal(await queueControlledBackfill(20, owner), 0);
     assert.equal(inserts, 1);
     assert.deepEqual([...enrichmentIds].sort(), ['already-enriched', 'missing-owned']);
   } finally {
@@ -119,9 +125,32 @@ test('scheduled runner fails closed before queue reconciliation or provider work
   }
 });
 
+test('reconciliation and worker reject an unlisted owner before database or provider work', async () => {
+  const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const unlisted = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, {
+    GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
+    GEMINI_ENRICHMENT_OWNER_USER_ID: owner, GEMINI_ENRICHMENT_ALLOWED_USER_IDS: owner,
+    GEMINI_ENRICHMENT_ROLLOUT_CAP: '20', GEMINI_API_KEY: 'unit-test',
+  });
+  try {
+    await assert.rejects(queueControlledBackfill(1, unlisted), /owner is not configured/);
+    await assert.rejects(runControlledGeminiEnrichment(1, unlisted), /is disabled/);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+    }
+  }
+});
+
 test('scheduled runner reconciles missing queue rows before bounded provider work when enabled', async () => {
   const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
-    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   Object.assign(process.env, {
     GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
@@ -150,7 +179,8 @@ test('scheduled runner reconciles missing queue rows before bounded provider wor
 
 test('scheduled runner may recover queue work while Gemini provider execution is disabled', async () => {
   const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
-    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_API_KEY'] as const;
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   Object.assign(process.env, {
     GEMINI_ENRICHMENT_ENABLED: 'false', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
@@ -167,6 +197,43 @@ test('scheduled runner may recover queue work while Gemini provider execution is
     assert.equal(result.queued, 1);
     assert.equal(result.attempted, 0);
     assert.equal(workerCalls, 0);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+    }
+  }
+});
+
+test('scheduled runner shares its bounded batch across every allowlisted owner', async () => {
+  const ownerA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const ownerB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const keys = ['GEMINI_ENRICHMENT_ENABLED', 'GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED',
+    'GEMINI_ENRICHMENT_OWNER_USER_ID', 'GEMINI_ENRICHMENT_ALLOWED_USER_IDS',
+    'GEMINI_ENRICHMENT_ROLLOUT_CAP', 'GEMINI_ENRICHMENT_BATCH_SIZE', 'GEMINI_API_KEY'] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, {
+    GEMINI_ENRICHMENT_ENABLED: 'true', GEMINI_ENRICHMENT_FREE_TIER_CONFIRMED: 'true',
+    GEMINI_ENRICHMENT_OWNER_USER_ID: ownerA,
+    GEMINI_ENRICHMENT_ALLOWED_USER_IDS: `${ownerA},invalid,${ownerB}`,
+    GEMINI_ENRICHMENT_ROLLOUT_CAP: '1000', GEMINI_ENRICHMENT_BATCH_SIZE: '5',
+    GEMINI_API_KEY: 'unit-test',
+  });
+  const queueCalls: { limit: number | undefined; ownerId: string | undefined }[] = [];
+  const runCalls: { limit: number | undefined; ownerId: string | undefined }[] = [];
+  try {
+    const result = await runScheduledGeminiEnrichment({
+      queue: async (limit, ownerId) => { queueCalls.push({ limit, ownerId }); return 1; },
+      run: async (limit, ownerId) => {
+        runCalls.push({ limit, ownerId });
+        return { attempted: 1, completed: 1, failed: 0, retries: 0,
+          inputTokens: 10, outputTokens: 5, categories: { AI: 1 } };
+      },
+    });
+    assert.deepEqual(queueCalls, [{ limit: 2, ownerId: ownerA }, { limit: 3, ownerId: ownerB }]);
+    assert.deepEqual(runCalls, queueCalls);
+    assert.equal(queueCalls.reduce((sum, call) => sum + (call.limit || 0), 0), 5);
+    assert.deepEqual(result, { enabled: true, queued: 2, attempted: 2, completed: 2, failed: 0,
+      retries: 0, inputTokens: 20, outputTokens: 10, categories: { AI: 2 } });
   } finally {
     for (const key of keys) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];

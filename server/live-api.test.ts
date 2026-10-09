@@ -93,7 +93,9 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     if (url.pathname === '/rest/v1/subscriptions') {
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
-      return Response.json({ user_id: owner, provider: 'stripe', plan: 'free', status: 'active', current_period_end: '1970-01-01T00:00:00Z' });
+      return Response.json(owner === 'user-b'
+        ? { user_id: owner, provider: 'stripe', plan: 'pro', status: 'past_due', current_period_end: '1970-01-01T00:00:00Z' }
+        : { user_id: owner, provider: 'stripe', plan: 'free', status: 'active', current_period_end: '1970-01-01T00:00:00Z' });
     }
     if (url.pathname === '/rest/v1/digests') {
       assert.equal(url.searchParams.get('user_id'), `eq.${token}`);
@@ -115,6 +117,10 @@ test('live API requires a verified session and scopes bookmark lookup to its own
       const owner = url.searchParams.get('user_id')?.replace(/^eq\./, '');
       assert.equal(owner, token);
       return Response.json([{ id: `${owner}-usage`, user_id: owner, input_tokens: 2, output_tokens: 3, estimated_cost: 0.01 }]);
+    }
+    if (url.pathname === '/rest/v1/usage_events') {
+      assert.equal(url.searchParams.get('user_id'), `eq.${token}`);
+      return Response.json([]);
     }
     if (url.pathname === '/rest/v1/rpc/clear_my_library') {
       clearTokens.push(token || '');
@@ -187,6 +193,11 @@ test('live API requires a verified session and scopes bookmark lookup to its own
     const billing = response();
     await liveApi(request('/billing/subscription', 'user-b'), billing.res);
     assert.equal((billing.result.body as { user_id: string }).user_id, 'user-b');
+
+    const expiredEntitlement = response();
+    await liveApi(request('/billing/entitlements', 'user-b'), expiredEntitlement.res);
+    assert.equal((expiredEntitlement.result.body as { plan: string; isPro: boolean }).plan, 'free');
+    assert.equal((expiredEntitlement.result.body as { plan: string; isPro: boolean }).isPro, false);
 
     const exported = response();
     await liveApi(request('/data/export', 'user-a', 'POST'), exported.res);

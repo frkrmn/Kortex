@@ -275,8 +275,7 @@ export async function liveApi(req: Request, res: Response): Promise<void> {
       ]);
       if (subscription.error || bookmarks.error || accounts.error || usage.error) throw subscription.error || bookmarks.error || accounts.error || usage.error;
       const sub = subscription.data;
-      const periodValid = Boolean(sub?.current_period_end && new Date(sub.current_period_end).getTime() > Date.now());
-      const isPro = sub?.plan === 'pro' && (sub.status === 'active' || sub.status === 'past_due' || (sub.status === 'trialing' && periodValid));
+      const isPro = hasActiveProEntitlement(sub);
       const plan = isPro ? 'pro' : 'free';
       const config = PLANS[plan];
       const askCount = (usage.data || []).filter(item => item.metric === 'ask').reduce((sum, item) => sum + item.quantity, 0);

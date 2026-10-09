@@ -82,12 +82,12 @@ test('category and scoped topic filters compose correctly', async ({ page, brows
   expect(topics.length, 'the controlled account needs an enriched bookmark topic').toBeGreaterThan(0);
   const categories = page.getByLabel('Categories');
   await categories.getByRole('button', { name: new RegExp(`^${category!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(`) }).click();
-  await expect(page.getByLabel('Topics')).toBeVisible();
-  const topicOptions = await page.getByLabel('Topics').getByRole('button').allTextContents();
+  await expect(page.getByLabel('Topics', { exact: true })).toBeVisible();
+  const topicOptions = await page.getByLabel('Topics', { exact: true }).getByRole('button').allTextContents();
   const topicOption = positiveOption(topicOptions, /^All topics\s*\(/i);
   expect(topicOption, 'selected category must have a non-empty topic').toBeTruthy();
   const topic = labelWithoutCount(topicOption!);
-  await page.getByLabel('Topics').getByRole('button', { name: topicOption!, exact: true }).click();
+  await page.getByLabel('Topics', { exact: true }).getByRole('button', { name: topicOption!, exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('topic')?.toLowerCase()).toBe(topic.toLowerCase());
   const cards = page.getByTestId('bookmark-card');
   expect(await cards.count()).toBeGreaterThan(0);

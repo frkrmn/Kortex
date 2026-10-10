@@ -13,6 +13,7 @@
     "test:seo": "node --import tsx --test src/grm131-public-demo.test.ts src/grm138-terms.test.ts src/grm139-privacy.test.ts src/grm140-blog.test.ts src/grm141-seo.test.ts",
     "test:economics": "node --import tsx --test server/live-api.test.ts server/sources/x-content.test.ts server/sources/x-live.test.ts server/sources/x-e2e-allowlist.test.ts server/economics/provider-budget.test.ts server/economics/smart-sync.test.ts server/economics/demo-isolation.test.ts src/components/XBookmarkReader.test.tsx src/lib/bookmark-order.test.ts && node server/economics/migration-validation.test.mjs && node server/security/grm125-relationship-rls.test.mjs",
     "test:settings": "node --import tsx --test src/lib/settings.test.ts src/components/settings-production.test.ts server/live-api.test.ts",
+    "test:theme": "node --import tsx --test src/lib/theme.test.ts src/components/settings-production.test.ts && npm run build && VITE_DEMO_MODE=true E2E_BASE_URL=http://127.0.0.1:3000 playwright test --project=theme --project=theme-mobile",
     "test:grm131": "node --import tsx --test src/grm131-public-demo.test.ts src/landing-typography.test.ts",
     "test:grm134": "node --import tsx --test src/lib/auth/redirect.test.ts src/lib/auth/session-lifecycle.test.ts src/auth-production.test.ts server/config/trust-proxy.test.ts server/live-api.test.ts src/grm131-public-demo.test.ts",
     "test:e2e": "npm run build && VITE_DEMO_MODE=false E2E_BASE_URL=http://127.0.0.1:3000 playwright test",

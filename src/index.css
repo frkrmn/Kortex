@@ -1,10 +1,45 @@
 @import "tailwindcss";
 
+:root {
+  --color-page: #FAFAF8;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #F4F4F1;
+  --color-surface-selected: #F2F2EE;
+  --color-text: #171717;
+  --color-text-secondary: #70706B;
+  --color-text-muted: #8A8A85;
+  --color-border: #E8E8E5;
+  --color-border-strong: #D0D0CB;
+  --color-accent: #2563EB;
+}
+
+:root[data-theme="dark"] {
+  --color-page: #111315;
+  --color-surface: #191C20;
+  --color-surface-subtle: #20242A;
+  --color-surface-selected: #292E35;
+  --color-text: #F4F4F2;
+  --color-text-secondary: #B7BBC2;
+  --color-text-muted: #9298A1;
+  --color-border: #30353D;
+  --color-border-strong: #444B55;
+  --color-accent: #6EA8FE;
+}
+
 @layer base {
+  html {
+    background: var(--color-page);
+  }
+
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #171717;
-    background-color: #FAFAF8;
+    color: var(--color-text);
+    background-color: var(--color-page);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  :focus-visible {
+    outline-color: var(--color-accent);
   }
 }
 
@@ -17,9 +52,94 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E2E2DE;
+  background: var(--color-border-strong);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #C8C8C3;
+  background: var(--color-text-muted);
+}
+
+/* Compatibility bridge for the existing visual system. New surfaces should use
+   the semantic variables above; these selectors keep the established light
+   palette intact while mapping legacy utility tokens to dark equivalents. */
+:root[data-theme="dark"] [class~="bg-[#FAFAF8]"],
+:root[data-theme="dark"] [class~="bg-[#F9F9F7]"],
+:root[data-theme="dark"] [class~="bg-[#F7F7F5]"] { background-color: var(--color-page) !important; }
+:root[data-theme="dark"] [class~="bg-[#FAFAF8]/95"] { background-color: color-mix(in srgb, var(--color-page) 95%, transparent) !important; }
+:root[data-theme="dark"] [class~="bg-[#FAFAF8]/90"] { background-color: color-mix(in srgb, var(--color-page) 90%, transparent) !important; }
+:root[data-theme="dark"] [class~="bg-[#FAFAF8]/50"] { background-color: color-mix(in srgb, var(--color-page) 50%, transparent) !important; }
+:root[data-theme="dark"] [class~="bg-white"],
+:root[data-theme="dark"] [class~="bg-[#FFFFFF]"] { background-color: var(--color-surface) !important; }
+:root[data-theme="dark"] [class~="bg-white/90"],
+:root[data-theme="dark"] [class~="bg-[#FFFFFF]/90"] { background-color: color-mix(in srgb, var(--color-surface) 90%, transparent) !important; }
+:root[data-theme="dark"] [class~="bg-white/80"] { background-color: color-mix(in srgb, var(--color-surface) 80%, transparent) !important; }
+:root[data-theme="dark"] [class~="bg-[#F5F5F2]"],
+:root[data-theme="dark"] [class~="bg-[#F5F5F3]"],
+:root[data-theme="dark"] [class~="bg-[#F4F4F1]"],
+:root[data-theme="dark"] [class~="bg-[#F4F4F2]"] { background-color: var(--color-surface-subtle) !important; }
+:root[data-theme="dark"] [class~="bg-[#F2F2EE]"],
+:root[data-theme="dark"] [class~="bg-[#F0F0EC]"],
+:root[data-theme="dark"] [class~="bg-[#F0F0EB]"],
+:root[data-theme="dark"] [class~="bg-[#EFEFEA]"],
+:root[data-theme="dark"] [class~="bg-[#EDEDE9]"] { background-color: var(--color-surface-selected) !important; }
+:root[data-theme="dark"] [class~="bg-[#171717]"] { background-color: #F1F3F5 !important; }
+:root[data-theme="dark"] [class~="text-[#171717]"] { color: var(--color-text) !important; }
+:root[data-theme="dark"] [class~="text-[#2B2B2B]"],
+:root[data-theme="dark"] [class~="text-[#383834]"],
+:root[data-theme="dark"] [class~="text-[#42423E]"],
+:root[data-theme="dark"] [class~="text-[#4A4A45]"],
+:root[data-theme="dark"] [class~="text-[#52524E]"],
+:root[data-theme="dark"] [class~="text-[#555550]"],
+:root[data-theme="dark"] [class~="text-[#5C5C58]"],
+:root[data-theme="dark"] [class~="text-[#70706B]"] { color: var(--color-text-secondary) !important; }
+:root[data-theme="dark"] [class~="text-[#8A8A85]"],
+:root[data-theme="dark"] [class~="text-[#A0A09A]"],
+:root[data-theme="dark"] [class~="text-[#A0A09B]"] { color: var(--color-text-muted) !important; }
+:root[data-theme="dark"] [class~="bg-[#171717]"][class~="text-white"],
+:root[data-theme="dark"] [class~="bg-[#171717]"][class~="text-[#FAFAF8]"] { color: #17191C !important; }
+:root[data-theme="dark"] [class~="border-[#F0F0EC]"],
+:root[data-theme="dark"] [class~="border-[#E8E8E5]"],
+:root[data-theme="dark"] [class~="border-[#E5E5E0]"],
+:root[data-theme="dark"] [class~="border-[#E4E4DF]"],
+:root[data-theme="dark"] [class~="border-[#E0E0DC]"] { border-color: var(--color-border) !important; }
+:root[data-theme="dark"] [class~="border-[#D9D9D3]"],
+:root[data-theme="dark"] [class~="border-[#D5D5CF]"],
+:root[data-theme="dark"] [class~="border-[#D0D0CB]"] { border-color: var(--color-border-strong) !important; }
+:root[data-theme="dark"] [class~="border-[#171717]"] { border-color: var(--color-text) !important; }
+:root[data-theme="dark"] [class~="bg-[#EEF4FF]"],
+:root[data-theme="dark"] [class~="bg-[#EBF0FF]"],
+:root[data-theme="dark"] [class~="bg-blue-50"],
+:root[data-theme="dark"] [class~="bg-indigo-50"] { background-color: #17233A !important; }
+:root[data-theme="dark"] [class~="text-[#2563EB]"],
+:root[data-theme="dark"] [class~="text-blue-600"],
+:root[data-theme="dark"] [class~="text-indigo-600"],
+:root[data-theme="dark"] [class~="text-indigo-700"] { color: #8AB4FF !important; }
+:root[data-theme="dark"] [class~="text-[#1E3A8A]"],
+:root[data-theme="dark"] [class~="text-blue-900"],
+:root[data-theme="dark"] [class~="text-indigo-900"],
+:root[data-theme="dark"] [class~="text-indigo-950"] { color: #D6E4FF !important; }
+:root[data-theme="dark"] [class~="border-blue-200"],
+:root[data-theme="dark"] [class~="border-indigo-100"],
+:root[data-theme="dark"] [class~="border-indigo-200"] { border-color: #34517E !important; }
+:root[data-theme="dark"] [class~="bg-rose-50"] { background-color: #351D25 !important; }
+:root[data-theme="dark"] [class~="bg-amber-50"] { background-color: #332714 !important; }
+:root[data-theme="dark"] [class~="bg-emerald-50"],
+:root[data-theme="dark"] [class~="bg-emerald-100"] { background-color: #153126 !important; }
+:root[data-theme="dark"] [class~="text-rose-700"],
+:root[data-theme="dark"] [class~="text-rose-800"],
+:root[data-theme="dark"] [class~="text-rose-900"] { color: #FFB4C2 !important; }
+:root[data-theme="dark"] [class~="text-amber-700"],
+:root[data-theme="dark"] [class~="text-amber-800"],
+:root[data-theme="dark"] [class~="text-amber-900"] { color: #FFD38A !important; }
+:root[data-theme="dark"] [class~="text-emerald-700"],
+:root[data-theme="dark"] [class~="text-emerald-800"] { color: #8DE1B3 !important; }
+:root[data-theme="dark"] [class~="hover:bg-[#F2F2EE]"]:hover,
+:root[data-theme="dark"] [class~="hover:bg-[#F4F4F1]"]:hover,
+:root[data-theme="dark"] [class~="hover:bg-[#FAFAF8]"]:hover { background-color: var(--color-surface-selected) !important; }
+:root[data-theme="dark"] [class~="hover:text-[#171717]"]:hover { color: var(--color-text) !important; }
+:root[data-theme="dark"] [class~="hover:border-[#D0D0CB]"]:hover { border-color: var(--color-border-strong) !important; }
+:root[data-theme="dark"] [class~="focus:bg-[#FFFFFF]"]:focus { background-color: var(--color-surface) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
 }

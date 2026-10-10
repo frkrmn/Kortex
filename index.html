@@ -3,6 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (() => {
+        const key = 'find-again-theme';
+        let preference = 'light';
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored === 'light' || stored === 'dark' || stored === 'system') preference = stored;
+        } catch {}
+        const resolved = preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : preference === 'dark' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.style.colorScheme = resolved;
+      })();
+    </script>
     <title>Recallly - AI Bookmark Knowledge Base</title>
     <meta name="description" content="Turn your saved X bookmarks into an organized, searchable, and conversational personal intelligence library." />
     <meta property="og:title" content="Recallly - AI Bookmark Knowledge Base" />

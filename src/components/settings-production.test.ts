@@ -33,6 +33,16 @@ test('Settings navigation uses semantic tabs and accessible destructive confirma
   assert.match(source, /Disconnect X account\?/);
 });
 
+test('Appearance exposes accessible Light, Dark, and System choices', () => {
+  const settings = read('../views/SettingsView.tsx');
+  assert.match(settings, /type="radio"/);
+  assert.match(settings, /name="color-theme"/);
+  for (const option of ["'light', 'Light'", "'dark', 'Dark'", "'system', 'System'"]) {
+    assert.match(settings, new RegExp(option));
+  }
+  assert.match(settings, /setThemePreference/);
+});
+
 test('Settings prevents stale cross-session X and billing details', () => {
   const settings = read('../views/SettingsView.tsx');
   const store = read('../lib/store/demo-store.tsx');

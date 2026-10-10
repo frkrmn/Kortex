@@ -32,12 +32,21 @@ export default defineConfig({
     video: 'off',
   },
   webServer: startsLocalServer ? {
-    command: 'VITE_DEMO_MODE=false npm run dev',
+    command: `VITE_DEMO_MODE=${process.env.VITE_DEMO_MODE || 'false'} npm run dev`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   } : undefined,
   projects: [
+    ...(!isProduction ? [{
+      name: 'theme',
+      testMatch: /(^|\/)theme\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
+    }, {
+      name: 'theme-mobile',
+      testMatch: /(^|\/)theme\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    }] : []),
     {
       name: 'setup',
       testMatch: /(^|\/)auth\.setup\.ts$/,

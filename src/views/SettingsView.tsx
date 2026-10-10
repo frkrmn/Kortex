@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, LogOut, RefreshCw, Unlink } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Loader2, LogOut, Monitor, Moon, RefreshCw, Sun, Unlink } from 'lucide-react';
 import { BillingSettingsSection } from '../components/BillingSettingsSection';
 import { useAuth } from '../lib/auth/auth-context';
 import { api } from '../lib/api';
 import { useRouter } from '../lib/router';
 import { SETTINGS_TABS, isCanonicalSettingsTab, resolveSettingsTab, settingsTabUrl } from '../lib/settings';
 import { useDemoStore } from '../lib/store/demo-store';
+import { type ThemePreference, useTheme } from '../lib/theme';
 
 function formatLastSync(timestamp?: string) {
   if (!timestamp) return 'No successful sync yet';
@@ -15,6 +16,7 @@ function formatLastSync(timestamp?: string) {
 }
 
 export const SettingsView: React.FC = () => {
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const { profile, refreshSession, signOut, isLoading: isAuthLoading, authError } = useAuth();
   const { searchParams, navigate } = useRouter();
   const {
@@ -277,7 +279,23 @@ export const SettingsView: React.FC = () => {
 
       {activeTab === 'appearance' && (
         <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" className="rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-6">
-          <h2 className="text-base font-bold text-[#171717]">Library appearance</h2><p className="mt-1 text-xs text-[#70706B]">Choose the bookmark density used on this device.</p>
+          <h2 className="text-base font-bold text-[#171717]">Appearance</h2><p className="mt-1 text-xs text-[#70706B]">Choose how Find Again looks on this device. Changes apply immediately.</p>
+          <fieldset className="mt-5 border-t border-[#F0F0EC] pt-5">
+            <legend className="text-xs font-semibold text-[#171717]">Color theme</legend>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {([
+                ['light', 'Light', Sun, 'Always use the light appearance.'],
+                ['dark', 'Dark', Moon, 'Always use the dark appearance.'],
+                ['system', 'System', Monitor, 'Match this device automatically.'],
+              ] as const).map(([value, label, Icon, description]) => (
+                <label key={value} className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${themePreference === value ? 'border-[#2563EB] bg-[#EEF4FF]' : 'border-[#E0E0DC] bg-[#FAFAF8] hover:border-[#D0D0CB]'}`}>
+                  <input className="sr-only" type="radio" name="color-theme" value={value} checked={themePreference === value} onChange={() => setThemePreference(value as ThemePreference)} />
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#2563EB]" aria-hidden="true" />
+                  <span><span className="block text-xs font-semibold text-[#171717]">{label}</span><span className="mt-1 block text-[11px] leading-4 text-[#70706B]">{description}</span></span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <fieldset className="mt-5 border-t border-[#F0F0EC] pt-5"><legend className="text-xs font-semibold text-[#171717]">Default bookmark layout</legend><div className="mt-3 inline-flex rounded-lg border border-[#E0E0DC] bg-[#F4F4F1] p-0.5">{(['comfortable', 'compact'] as const).map(mode => <button key={mode} type="button" aria-pressed={bookmarkViewMode === mode} onClick={() => setBookmarkViewMode(mode)} className={`min-h-10 rounded-md px-3 py-2 text-xs font-medium capitalize ${bookmarkViewMode === mode ? 'bg-white text-[#171717] shadow-xs' : 'text-[#70706B]'}`}>{mode}</button>)}</div></fieldset>
         </section>
       )}

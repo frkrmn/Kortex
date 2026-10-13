@@ -145,9 +145,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
 
         {/* User Card */}
         <button type="button"
+          data-testid="sidebar-account-card"
           onClick={() => navigate('/settings?tab=account')}
           title="Account profile & billing"
-          className={`w-full flex items-center rounded-lg p-1.5 hover:bg-[#F0F0EB] transition-colors cursor-pointer ${
+          className={`theme-account-card w-full flex items-center rounded-lg p-1.5 hover:bg-[#F0F0EB] transition-colors cursor-pointer ${
             sidebarCollapsed ? 'justify-center' : 'justify-between'
           }`}
         >
@@ -155,7 +156,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
             {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-[#E0E0DC] shrink-0" /> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#171717] text-[10px] font-bold text-white" aria-hidden="true">{(profile?.display_name || profile?.email || 'R').slice(0, 2).toUpperCase()}</span>}
             {!sidebarCollapsed && (
               <div className="min-w-0 text-left">
-                <p className="text-xs font-medium text-[#171717] truncate leading-tight">
+                <p data-testid="sidebar-account-name" className="text-xs font-medium text-[var(--color-text)] truncate leading-tight">
                   {profile?.display_name || 'Find Again account'}
                 </p>
                 <p className="text-[10px] text-[#8A8A85] truncate leading-tight">

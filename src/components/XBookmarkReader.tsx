@@ -42,12 +42,12 @@ function ThreadPost({ post }: { post: BookmarkReferencedPost }) {
       <div className="rounded-xl border border-[#E8E8E5] bg-white p-4">
         <div className="mb-2 flex items-center gap-2 text-xs">
           {post.authorAvatarUrl && <img src={post.authorAvatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />}
-          <span className="font-semibold text-[#242422]">{post.authorName || 'X author'}</span>
+          <span className="theme-content-primary font-semibold">{post.authorName || 'X author'}</span>
           {post.authorUsername && <span className="text-[#8A8A85]">@{post.authorUsername}</span>}
           {dateLabel(post.publishedAt) && <span className="ml-auto text-[#8A8A85]">{dateLabel(post.publishedAt)}</span>}
         </div>
         {post.available && post.text ? (
-          <p className="whitespace-pre-line text-sm leading-6 text-[#30302D]">{post.text}</p>
+          <p className="theme-content-primary whitespace-pre-line text-sm leading-6">{post.text}</p>
         ) : (
           <p className="flex items-center gap-2 text-sm text-[#8A8A85]"><ImageOff className="h-4 w-4" /> Referenced post is not available in this response.</p>
         )}
@@ -84,14 +84,14 @@ export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
         </div>
       ) : (
         <>
-          <p className="whitespace-pre-line text-[16px] leading-7 text-[#242422] selection:bg-amber-100">{bookmark.content}</p>
+          <p data-testid="reader-bookmark-content" className="theme-content-primary whitespace-pre-line text-[16px] leading-7 selection:bg-amber-100">{bookmark.content}</p>
           <MediaGallery media={bookmark.media || []} />
         </>
       )}
 
       {!unavailable && bookmark.thread_detected && availableThreadPosts.length > 0 && (
         <details className="group rounded-xl border border-[#E8E8E5] bg-[#FAFAF8]">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-[#242422]">
+          <summary className="theme-content-primary flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
             <span>Thread · {availableThreadPosts.length + 1} available posts</span>
             <ChevronDown className="h-4 w-4 text-[#8A8A85] transition-transform group-open:rotate-180" />
           </summary>
@@ -103,9 +103,9 @@ export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
             ))}
             <div className="relative pl-7">
               <span className="absolute left-[7px] top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#2563EB] ring-1 ring-blue-300" />
-              <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-                <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-blue-700">Bookmarked post</span>
-                <p className="whitespace-pre-line text-sm leading-6 text-[#242422]">{bookmark.content}</p>
+              <div className="theme-ai-surface-soft rounded-xl border p-4">
+                <span className="theme-ai-text-secondary mb-2 block text-[10px] font-semibold uppercase tracking-wider">Bookmarked post</span>
+                <p className="theme-content-primary whitespace-pre-line text-sm leading-6">{bookmark.content}</p>
               </div>
             </div>
             {!bookmark.thread_fully_available && (

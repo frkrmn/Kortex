@@ -162,9 +162,9 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
           </div>
 
           {/* AI Distillation Section */}
-          <div className="space-y-4 p-4 rounded-xl bg-[#F8F9FE] border border-[#E0E7FF]">
+          <div className="theme-ai-panel-detail space-y-4 p-4 rounded-xl border">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4338CA]">
+              <div className="theme-ai-text-secondary flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
                 <Sparkles className="w-4 h-4" />
                 <span>AI Synthesized Knowledge</span>
               </div>
@@ -173,7 +173,7 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
               <button
                 onClick={handleReprocess}
                 disabled={isReprocessing || bookmark.enrichment_status === 'processing'}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#4338CA] hover:bg-[#EEF2FF] rounded-lg border border-[#C7D2FE] transition-colors disabled:opacity-50 cursor-pointer"
+                className="theme-ai-action theme-ai-text-secondary flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--color-ai-border)] transition-colors disabled:opacity-50 cursor-pointer"
                 title="Re-run AI enrichment analysis"
               >
                 <RefreshCw className={`w-3 h-3 ${isReprocessing || bookmark.enrichment_status === 'processing' ? 'animate-spin' : ''}`} />
@@ -183,12 +183,12 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
 
             {/* Processing State */}
             {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
-              <div className="p-3 rounded-lg bg-indigo-100/50 border border-indigo-200/70 text-xs text-indigo-900 space-y-2">
+              <div className="theme-ai-surface p-3 rounded-lg border text-xs space-y-2">
                 <div className="flex items-center gap-2 font-medium">
-                  <Sparkles className={`w-3.5 h-3.5 text-indigo-600 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
+                  <Sparkles className={`theme-ai-accent w-3.5 h-3.5 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
                   <span>{enrichmentPresentation?.title}</span>
                 </div>
-                <p className="text-[11px] text-indigo-700">
+                <p className="theme-ai-text-secondary text-[11px]">
                   {enrichmentPresentation?.detail}
                 </p>
               </div>
@@ -210,8 +210,8 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
             {/* Summary Body */}
             {bookmark.ai_summary && (
               <div>
-                <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Executive Summary</span>
-                <p className="text-sm font-medium text-[#1E1B4B] leading-relaxed">
+                <span className="text-[11px] font-medium text-[var(--color-text-secondary)] block mb-1">Executive Summary</span>
+                <p className="theme-content-primary text-sm font-medium leading-relaxed">
                   {bookmark.ai_summary}
                 </p>
               </div>
@@ -221,8 +221,8 @@ export const BookmarkDetailModal: React.FC<BookmarkDetailModalProps> = ({
               <div className="pt-3 border-t border-[#E0E7FF]/80 flex items-start gap-2.5">
                 <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <div>
-                  <span className="text-[11px] font-medium text-[#6B7280] block mb-0.5">Why you may have saved this</span>
-                  <p className="text-xs text-[#374151] leading-relaxed">
+                  <span className="text-[11px] font-medium text-[var(--color-text-secondary)] block mb-0.5">Why you may have saved this</span>
+                  <p className="theme-content-primary text-xs leading-relaxed">
                     {bookmark.why_saved_insight}
                   </p>
                 </div>

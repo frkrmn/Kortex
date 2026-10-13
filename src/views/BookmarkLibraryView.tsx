@@ -162,19 +162,19 @@ export const BookmarkLibraryView: React.FC = () => {
 
       {/* AI Enrichment Background Progress Banner */}
       {(enrichmentStatus.isProcessing || enrichmentStatus.pendingCount > 0) && (
-        <div className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-xs text-indigo-950 shadow-2xs animate-in fade-in duration-200">
+        <div data-testid="global-enrichment-status" className="theme-ai-surface flex items-center justify-between p-3.5 rounded-xl border text-xs shadow-2xs animate-in fade-in duration-200">
           <div className="flex items-center gap-3 min-w-0">
-            <Sparkles className={`w-4 h-4 text-indigo-600 shrink-0 ${enrichmentPresentation.busy ? 'animate-spin' : ''}`} />
+            <Sparkles className={`theme-ai-accent w-4 h-4 shrink-0 ${enrichmentPresentation.busy ? 'animate-spin' : ''}`} />
             <div className="min-w-0">
-              <span className="font-semibold block text-indigo-900">
+              <span className="theme-ai-text font-semibold block">
                 {enrichmentPresentation.title}
               </span>
-              <span className="text-[11px] text-indigo-700">
+              <span className="theme-ai-text-secondary text-[11px]">
                 {enrichmentStatus.activeCount} active • {enrichmentStatus.pendingCount} queued • {enrichmentStatus.completedCount} completed
               </span>
             </div>
           </div>
-          <span className="text-[11px] font-medium text-indigo-600 shrink-0 bg-white/80 px-2.5 py-1 rounded-md border border-indigo-100">
+          <span className="theme-ai-text-secondary shrink-0 rounded-md border border-[var(--color-ai-border-soft)] bg-[var(--color-ai-panel)] px-2.5 py-1 text-[11px] font-medium">
             Background Queue
           </span>
         </div>

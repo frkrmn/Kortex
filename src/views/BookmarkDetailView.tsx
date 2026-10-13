@@ -146,8 +146,8 @@ export const BookmarkDetailView: React.FC = () => {
           <div className="p-5 bg-[#FFFFFF] border border-[#E8E8E5] rounded-2xl shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#4F46E5]" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#4F46E5]">
+                <Sparkles className="theme-ai-accent w-4 h-4" />
+                <h3 className="theme-ai-accent text-xs font-semibold uppercase tracking-wider">
                   AI Key Summary
                 </h3>
               </div>
@@ -155,7 +155,7 @@ export const BookmarkDetailView: React.FC = () => {
               {dataMode === 'demo' && <button
                 onClick={() => reprocessBookmark(bookmark.id)}
                 disabled={bookmark.enrichment_status === 'processing'}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg border border-[#C7D2FE] transition-colors disabled:opacity-50 cursor-pointer"
+                className="theme-ai-action theme-ai-text-secondary flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--color-ai-border)] transition-colors disabled:opacity-50 cursor-pointer"
                 title="Re-run AI enrichment"
               >
                 <RefreshCw className={`w-3 h-3 ${bookmark.enrichment_status === 'processing' ? 'animate-spin' : ''}`} />
@@ -165,12 +165,12 @@ export const BookmarkDetailView: React.FC = () => {
 
             {/* Processing Banner */}
             {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
-              <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">
+              <div className="theme-ai-surface-soft p-3 rounded-xl border text-xs space-y-1">
                 <div className="flex items-center gap-2 font-medium">
-                  <Sparkles className={`w-3.5 h-3.5 text-indigo-600 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
+                  <Sparkles className={`theme-ai-accent w-3.5 h-3.5 ${enrichmentPresentation?.busy ? 'animate-spin' : ''}`} />
                   <span>{enrichmentPresentation?.title}</span>
                 </div>
-                <p className="text-[11px] text-indigo-700">
+                <p className="theme-ai-text-secondary text-[11px]">
                   {enrichmentPresentation?.detail}
                 </p>
               </div>
@@ -191,17 +191,17 @@ export const BookmarkDetailView: React.FC = () => {
               </div>
             )}
 
-            <p className="text-xs leading-relaxed text-[#383834]">
+            <p className="theme-content-primary text-xs leading-relaxed">
               {bookmark.ai_summary || enrichmentPresentation?.summary || 'No AI summary generated yet.'}
             </p>
-            {bookmark.ai_category && <p className="text-xs text-[#595954]">Category · <span className="font-semibold">{bookmark.ai_category}</span></p>}
+            {bookmark.ai_category && <p className="text-xs text-[var(--color-text-secondary)]">Category · <span className="font-semibold">{bookmark.ai_category}</span></p>}
 
             {bookmark.why_saved_insight && (
               <div className="pt-3 border-t border-[#F0F0EC] space-y-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8A85] block">
                   Why you saved this
                 </span>
-                <p className="text-xs text-[#595954] leading-relaxed italic">
+                <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed italic">
                   "{bookmark.why_saved_insight}"
                 </p>
               </div>

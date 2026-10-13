@@ -53,6 +53,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
             <Search className="w-4 h-4" />
           </button>
           <button
+            data-testid="mobile-account-control"
             onClick={() => navigate('/settings')}
             aria-label="Open account settings"
             className="rounded-full overflow-hidden border border-[#E0E0DC]"

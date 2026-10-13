@@ -95,7 +95,7 @@ export const PublicDemoView: React.FC = () => {
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600">
                     <Sparkles className="h-4 w-4" /> AI Summary
                   </div>
-                  <p className="text-sm leading-6 text-[#383834]">{bookmark.ai_summary}</p>
+                  <p className="theme-content-primary text-sm leading-6">{bookmark.ai_summary}</p>
                   <div className="border-t border-[#F0F0EC] pt-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-[#8A8A85]">Category</p>
                     <p className="mt-1 text-sm font-semibold">{primaryCategory(bookmark.topics || [])}</p>
@@ -170,7 +170,7 @@ export const PublicDemoView: React.FC = () => {
                     </div>
                     <span className="ml-auto rounded bg-[#EEF4FF] px-2 py-1 text-[10px] font-medium text-[#1E3A8A]">{primaryCategory(item.topics || [])}</span>
                   </div>
-                  <p className="mt-4 line-clamp-4 whitespace-pre-line text-sm leading-6 text-[#383834]">{item.content}</p>
+                  <p className="theme-content-primary mt-4 line-clamp-4 whitespace-pre-line text-sm leading-6">{item.content}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {(item.topics || []).map((itemTopic) => <span key={itemTopic} className="rounded-full bg-[#F4F4F1] px-2 py-1 text-[10px] text-[#70706B]">{itemTopic}</span>)}
                   </div>

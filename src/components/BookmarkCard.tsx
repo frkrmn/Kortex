@@ -74,7 +74,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <span className="text-[10px] text-[#8A8A85]">@{bookmark.author_username}</span>
               <span className="text-[10px] text-[#8A8A85]">• {formattedDate}</span>
             </div>
-            <p data-testid="bookmark-content" className="text-xs text-[#52524E] truncate mt-0.5">{bookmark.content}</p>
+            <p data-testid="bookmark-content" className="theme-content-primary text-xs truncate mt-0.5">{bookmark.content}</p>
           </div>
         </div>
 
@@ -241,7 +241,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           onClick={() => onOpenDetail(bookmark)}
           className="cursor-pointer space-y-3 mb-4"
         >
-          <p data-testid="bookmark-content" className="text-[13px] text-[#242422] leading-relaxed line-clamp-4 font-normal whitespace-pre-line">
+          <p data-testid="bookmark-content" className="theme-content-primary text-[13px] leading-relaxed line-clamp-4 font-normal whitespace-pre-line">
             {bookmark.content}
           </p>
 
@@ -260,10 +260,10 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
           {/* AI Processing State Skeleton / Banner */}
           {(bookmark.enrichment_status === 'processing' || bookmark.enrichment_status === 'pending') && (
-            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100/80 text-xs">
-              <Sparkles className={`w-3.5 h-3.5 text-indigo-600 shrink-0 ${enrichmentPresentation?.busy ? 'animate-pulse' : ''}`} />
+            <div data-testid="bookmark-enrichment-status" className="theme-ai-surface-soft flex items-center gap-2.5 p-2.5 rounded-xl border text-xs">
+              <Sparkles className={`theme-ai-accent w-3.5 h-3.5 shrink-0 ${enrichmentPresentation?.busy ? 'animate-pulse' : ''}`} />
               <div className="flex-1 min-w-0">
-                <span className="text-[11px] font-medium text-indigo-700">
+                <span className="theme-ai-text-secondary text-[11px] font-medium">
                   {enrichmentPresentation?.detail}
                 </span>
               </div>
@@ -285,11 +285,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
           {/* AI Key Insight Card */}
           {bookmark.ai_summary && (
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F8F9FA] border border-[#EBECEF] text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-[#4F46E5] shrink-0 mt-0.5" />
+            <div className="theme-ai-panel flex items-start gap-2.5 p-3 rounded-xl border text-xs">
+              <Sparkles className="theme-ai-accent w-3.5 h-3.5 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#4F46E5]">
+                  <span className="theme-ai-accent text-[10px] font-semibold uppercase tracking-wider">
                     AI Summary
                   </span>
                   {bookmark.language && bookmark.language !== 'en' && (
@@ -298,7 +298,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-[12px] text-[#4A4A45] leading-normal line-clamp-2">
+                <p className="theme-content-primary text-[12px] leading-normal line-clamp-2">
                   {bookmark.ai_summary}
                 </p>
               </div>

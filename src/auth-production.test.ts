@@ -3,15 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
+const authenticatedRoutes = readFileSync(new URL('./AuthenticatedRoutes.tsx', import.meta.url), 'utf8');
 const auth = readFileSync(new URL('./lib/auth/auth-context.tsx', import.meta.url), 'utf8');
 const store = readFileSync(new URL('./lib/store/demo-store.tsx', import.meta.url), 'utf8');
 const api = readFileSync(new URL('./lib/api.ts', import.meta.url), 'utf8');
 const callback = readFileSync(new URL('./views/AuthCallbackView.tsx', import.meta.url), 'utf8');
 
 test('private application waits for verified auth and remounts state per identity', () => {
-  assert.match(app, /authState === 'initializing'/);
-  assert.match(app, /Checking your session/);
-  assert.match(app, /DemoStoreProvider key=\{user\?\.id \|\| 'demo'\}/);
+  assert.match(app, /const AuthenticatedRoutes = lazy/);
+  assert.match(authenticatedRoutes, /authState !== 'initializing'/);
+  assert.match(authenticatedRoutes, /Checking your session/);
+  assert.match(authenticatedRoutes, /DemoStoreProvider key=\{user\?\.id \|\| 'demo'\}/);
   assert.match(auth, /resolveVerifiedSession/);
   assert.match(auth, /event === 'INITIAL_SESSION'/);
 });

@@ -46,6 +46,10 @@ export default defineConfig({
       name: 'theme-mobile',
       testMatch: /(^|\/)theme\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    }, {
+      name: 'route-splitting',
+      testMatch: /(^|\/)route-splitting\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
     }] : []),
     {
       name: 'setup',

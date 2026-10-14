@@ -54,6 +54,7 @@ test('Dark persists across reloads and public routes', async ({ page }, testInfo
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.goto('/demo');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('#public-interactive-demo')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('demo-dark.png'), fullPage: true });
 });
 

@@ -50,6 +50,10 @@ export default defineConfig({
       name: 'route-splitting',
       testMatch: /(^|\/)route-splitting\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
+    }, {
+      name: 'landing',
+      testMatch: /(^|\/)landing\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
     }] : []),
     {
       name: 'setup',

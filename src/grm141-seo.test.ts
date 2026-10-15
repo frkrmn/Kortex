@@ -101,8 +101,9 @@ test('robots and sitemap expose only intended canonical pages', () => {
 });
 
 test('landing copy describes shipped discovery features rather than planned AI surfaces', () => {
-  assert.match(landingSource, /Search & Filter/);
-  assert.match(landingSource, /AI Summaries & Topics/);
-  assert.match(landingSource, /Rich Bookmark Reader/);
+  assert.match(landingSource, /Powerful search/);
+  assert.match(landingSource, /AI summaries/);
+  assert.match(landingSource, /Built-in Reader/);
+  assert.match(landingSource, /structured JSON/);
   assert.doesNotMatch(landingSource, /Semantic Search|Conversational RAG|Weekly Intelligence Digest|Shareable Collections/);
 });

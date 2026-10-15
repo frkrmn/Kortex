@@ -50,7 +50,8 @@ test('landing sends the interactive demo CTA to the public demo route', () => {
   const app = read('./App.tsx');
   const landing = read('./views/LandingPage.tsx');
   assert.match(app, /onExploreDemo=\{\(\) => navigate\('\/demo'\)\}/);
-  assert.match(landing, /Explore interactive demo/);
+  assert.match(landing, /Watch Demo/);
+  assert.match(landing, /Explore Demo/);
   assert.match(landing, /onClick=\{onExploreDemo\}/);
 });
 

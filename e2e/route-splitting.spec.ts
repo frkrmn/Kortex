@@ -8,7 +8,7 @@ async function loadedModulePaths(page: import('@playwright/test').Page) {
 
 test('public routes defer authenticated application modules', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Your saved ideas/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Save, understand and find anything/i })).toBeVisible();
   const landingModules = await loadedModulePaths(page);
   expect(landingModules.some(path => path.includes('LandingPage'))).toBe(true);
   expect(landingModules.some(path => path.includes('AuthenticatedRoutes') || path.includes('BookmarkLibraryView'))).toBe(false);

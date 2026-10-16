@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, ArrowRight, CheckCircle2, Globe, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Globe, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
+import { BrandMark } from '../components/BrandMark';
 import { useDemoStore } from '../lib/store/demo-store';
 import { api } from '../lib/api';
 
@@ -182,9 +183,7 @@ export const OnboardingView: React.FC = () => {
     <div className="min-h-screen bg-[#FAFAF8] text-[#171717] flex flex-col justify-center items-center py-12 px-4 sm:px-6">
       <div className="w-full max-w-lg bg-[#FFFFFF] border border-[#E8E8E5] rounded-3xl p-6 sm:p-10 shadow-xs flex flex-col items-center text-center">
         {/* Brand Icon */}
-        <div className="w-11 h-11 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center mb-6 shadow-xs">
-          <Layers className="w-5 h-5" />
-        </div>
+        <div className="mb-6"><BrandMark compact className="brand-lockup--large" /></div>
 
         {/* Step Indicator */}
         <div className="flex items-center gap-2 mb-8">

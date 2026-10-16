@@ -9,6 +9,10 @@ function dateLabel(value?: string) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function authorInitials(value: string) {
+  return value.replace(' · Sample', '').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
+}
+
 function MediaGallery({ media }: { media: BookmarkMedia[] }) {
   if (!media.length) return null;
   return (
@@ -57,7 +61,7 @@ function ThreadPost({ post }: { post: BookmarkReferencedPost }) {
   );
 }
 
-export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
+export function XBookmarkReader({ bookmark, sample = false }: { bookmark: Bookmark; sample?: boolean }) {
   const unavailable = bookmark.source === 'twitter' && Boolean(bookmark.external_content_status && bookmark.external_content_status !== 'available');
   const availableThreadPosts = (bookmark.referenced_posts || []).filter(post => post.type === 'replied_to');
   const published = dateLabel(bookmark.published_at);
@@ -66,7 +70,7 @@ export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
     <article className="space-y-5 rounded-2xl border border-[#E8E8E5] bg-white p-5 shadow-2xs sm:p-7">
       <header className="flex items-start justify-between gap-4 border-b border-[#F0F0EC] pb-5">
         <div className="flex min-w-0 items-center gap-3">
-          <img src={bookmark.author_avatar} alt={bookmark.author_name} className="h-11 w-11 shrink-0 rounded-full border border-[#E5E5E0] object-cover" />
+          {bookmark.author_avatar ? <img src={bookmark.author_avatar} alt={bookmark.author_name} className="h-11 w-11 shrink-0 rounded-full border border-[#E5E5E0] object-cover" /> : <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xs font-bold text-blue-900">{authorInitials(bookmark.author_name)}</span>}
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-[#171717]">{bookmark.author_name}</h1>
             <p className="truncate text-xs text-[#70706B]">@{bookmark.author_username}</p>
@@ -116,10 +120,12 @@ export function XBookmarkReader({ bookmark }: { bookmark: Bookmark }) {
       )}
 
       <footer className="flex items-center justify-between gap-4 border-t border-[#F0F0EC] pt-4 text-xs text-[#70706B]">
-        <span>Source: X</span>
-        <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-medium text-[#2563EB] hover:underline">
-          View original on X <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        <span>Source: {sample ? 'Synthetic X-style sample' : 'X'}</span>
+        {sample ? <span>Demo content · no external post</span> : (
+          <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-medium text-[#2563EB] hover:underline">
+            View original on X <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
       </footer>
     </article>
   );

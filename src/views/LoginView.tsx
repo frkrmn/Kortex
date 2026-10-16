@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Layers, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
 import { sanitizeRedirectPath } from '../lib/auth/redirect';
+import { BrandMark } from '../components/BrandMark';
 
 export const LoginView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
@@ -47,10 +48,7 @@ export const LoginView: React.FC = () => {
           onClick={() => navigate('/')}
           className="flex items-center justify-center gap-2.5 cursor-pointer mb-8"
         >
-          <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
-            <Layers className="w-5 h-5" />
-          </div>
-          <span className="font-bold text-xl tracking-tight text-[#171717]">Find Again</span>
+          <BrandMark className="brand-lockup--large" />
         </div>
 
         {/* Card Container */}
@@ -180,6 +178,7 @@ export const LoginView: React.FC = () => {
               Create one
             </button>
           </div>
+          <div className="mt-4 border-t border-[#F0F0EC] pt-4 text-center"><button type="button" onClick={() => navigate('/demo')} className="min-h-11 text-xs font-semibold text-[#2563EB] hover:underline">Explore Interactive Demo</button></div>
         </div>
       </div>
     </div>

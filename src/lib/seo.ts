@@ -4,7 +4,7 @@ import { getBlogArticle } from '../content/blog';
 import { marketingFaqs } from '../content/marketing';
 
 export const SITE_URL = 'https://kortexmarks.vercel.app';
-export const SOCIAL_IMAGE_PATH = '/find-again-social.png';
+export const SOCIAL_IMAGE_PATH = '/find-again-social-arctic.png';
 
 export type SeoConfig = {
   title: string;

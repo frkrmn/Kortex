@@ -10,7 +10,7 @@ const robots = fs.readFileSync(new URL('../public/robots.txt', import.meta.url),
 const vercel = fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8');
 const seoSource = fs.readFileSync(new URL('./lib/seo.ts', import.meta.url), 'utf8');
 const landingSource = fs.readFileSync(new URL('./views/LandingPage.tsx', import.meta.url), 'utf8');
-const socialImage = fs.readFileSync(new URL('../public/find-again-social.png', import.meta.url));
+const socialImage = fs.readFileSync(new URL('../public/find-again-social-arctic.png', import.meta.url));
 
 const acquisitionRoutes: Array<[RouteType, string, string]> = [
   ['landing', '/', ''],

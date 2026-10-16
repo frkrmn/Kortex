@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { DEFAULT_TRIAL_DAYS, PLANS, X_HISTORY_EXPLANATION } from '../config/plans';
 import { marketingFaqs } from '../content/marketing';
+import { approvedTestimonials } from '../content/testimonials';
+import { BrandMark } from '../components/BrandMark';
+import { SocialProofSection } from '../components/SocialProofSection';
 import './LandingPage.css';
 
 interface LandingPageProps {
@@ -43,7 +46,7 @@ const productValues = [
 ];
 
 const Logo: React.FC = () => (
-  <span className="mi-logo-mark" aria-hidden="true"><Layers size={18} strokeWidth={2.2} /></span>
+  <BrandMark compact markClassName="mi-logo-mark" />
 );
 
 const ProductPreview: React.FC = () => (
@@ -135,6 +138,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const showSocialProofPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).has('preview-social-proof');
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -144,6 +148,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [menuOpen]);
+
+  useEffect(() => {
+    const scrollToHash = () => {
+      if (!window.location.hash) return;
+      let id = window.location.hash.slice(1);
+      try { id = decodeURIComponent(id); } catch { return; }
+      const target = document.getElementById(id);
+      if (!target) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      requestAnimationFrame(() => target.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }));
+    };
+    scrollToHash();
+    window.addEventListener('hashchange', scrollToHash);
+    return () => window.removeEventListener('hashchange', scrollToHash);
+  }, []);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -156,8 +175,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </button>
 
           <nav className="mi-desktop-nav" aria-label="Primary navigation">
-            <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
+            <a href="/#features">Features</a>
+            <a href="/#pricing">Pricing</a>
             <a href="/blog">Blog</a>
           </nav>
 
@@ -178,8 +197,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
         <div id="landing-mobile-menu" className="mi-mobile-menu" hidden={!menuOpen}>
           <nav aria-label="Mobile navigation">
-            <a href="#features" onClick={closeMenu}>Features</a>
-            <a href="#pricing" onClick={closeMenu}>Pricing</a>
+            <a href="/#features" onClick={closeMenu}>Features</a>
+            <a href="/#pricing" onClick={closeMenu}>Pricing</a>
             <a href="/blog" onClick={closeMenu}>Blog</a>
             <button type="button" onClick={() => { closeMenu(); onSignIn(); }}>Sign In</button>
             <button type="button" className="mi-button mi-button--primary" onClick={() => { closeMenu(); onStartOnboarding(); }}>Get Started Free</button>
@@ -198,7 +217,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <p className="mi-hero-lede">Find Again turns your X bookmarks into a searchable, organized knowledge library with AI summaries, topics and collections.</p>
               <div className="mi-hero-actions">
                 <button type="button" id="landing-hero-cta" className="mi-button mi-button--primary mi-button--large" onClick={onStartOnboarding}>Get Started Free <ArrowRight size={17} /></button>
-                <button type="button" className="mi-button mi-button--secondary mi-button--large" onClick={onExploreDemo}>Watch Demo</button>
+                <button type="button" className="mi-button mi-button--secondary mi-button--large" onClick={onExploreDemo}>Interactive Demo</button>
               </div>
               <div className="mi-capability-strip" aria-label="Core capabilities">
                 {['Import your bookmarks', 'AI summaries', 'Smart organization', 'Find anything, fast'].map(item => <span key={item}><Check size={14} />{item}</span>)}
@@ -261,7 +280,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <p className="mi-eyebrow">FROM SCATTERED POSTS TO LASTING KNOWLEDGE</p>
               <h2>Turn what you save into insights.</h2>
               <p>Eligible bookmarks can move through queued AI enrichment in the background, while the original source remains easy to reach.</p>
-              <button type="button" className="mi-button mi-button--light mi-flow-cta" onClick={onExploreDemo}>See It in Action <ArrowRight size={17} /></button>
+              <button type="button" className="mi-button mi-button--light mi-flow-cta" onClick={onExploreDemo}>Explore Interactive Demo <ArrowRight size={17} /></button>
             </div>
             <div className="mi-flow" aria-label="X bookmark to organized knowledge">
               <article className="mi-flow-card mi-flow-card--source">
@@ -298,6 +317,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
+        <SocialProofSection testimonials={approvedTestimonials} preview={showSocialProofPreview} />
+
         <section className="mi-section mi-control-section">
           <div className="mi-container mi-control-grid">
             <div className="mi-control-copy">
@@ -319,13 +340,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        <section id="pricing" className="mi-section mi-section--soft">
+        <section className="mi-section mi-section--soft" aria-labelledby="pricing-heading">
           <div className="mi-container">
-            <div className="mi-section-heading mi-section-heading--center">
+            <div id="pricing" className="mi-section-heading mi-section-heading--center">
               <p className="mi-eyebrow">SIMPLE, HONEST PRICING</p>
-              <h2>Start for free. Upgrade when you need more.</h2>
+              <h2 id="pricing-heading">Start for free. Upgrade when you need more.</h2>
               <p>Stripe Checkout shows the authoritative Pro price, billing interval, trial eligibility, and payment terms before confirmation.</p>
             </div>
+            <div className="mi-pricing-stack">
             <div className="mi-pricing-grid">
               <article className="mi-price-card">
                 <div className="mi-price-head"><div><span>FREE</span><h3>{PLANS.free.name}</h3></div><p><strong>{PLANS.free.prices.monthly.formatted}</strong><small>forever</small></p></div>
@@ -341,7 +363,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button type="button" id="landing-pricing-pro-btn" className="mi-button mi-button--primary" onClick={onStartOnboarding}>Review Pro Access <ArrowRight size={16} /></button>
               </article>
             </div>
-            <p className="mi-pricing-note">{X_HISTORY_EXPLANATION}</p>
+            <p className="mi-pricing-note"><span aria-hidden="true">i</span>{X_HISTORY_EXPLANATION}</p>
+            </div>
           </div>
         </section>
 
@@ -370,7 +393,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="mi-final-orb" aria-hidden="true" />
               <p className="mi-eyebrow">YOUR IDEAS DESERVE A SECOND LIFE</p>
               <h2>Start building your knowledge library today.</h2>
-              <div><button type="button" className="mi-button mi-button--dark mi-button--large" onClick={onStartOnboarding}>Get Started Free <ArrowRight size={17} /></button><button type="button" className="mi-button mi-button--glass mi-button--large" onClick={onExploreDemo}>Explore Demo</button></div>
+              <div><button type="button" className="mi-button mi-button--dark mi-button--large" onClick={onStartOnboarding}>Get Started Free <ArrowRight size={17} /></button><button type="button" className="mi-button mi-button--glass mi-button--large" onClick={onExploreDemo}>Explore Interactive Demo</button></div>
             </div>
           </div>
         </section>
@@ -379,7 +402,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <footer className="mi-footer">
         <div className="mi-container mi-footer-grid">
           <div><button type="button" className="mi-brand" onClick={onGoHome}><Logo /><span>Find Again</span></button><p>Turn saved X bookmarks into a library worth returning to.</p></div>
-          <nav aria-label="Footer navigation"><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="/blog">Blog</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+          <nav aria-label="Footer navigation"><a href="/#features">Features</a><a href="/#pricing">Pricing</a><a href="/demo">Interactive Demo</a><a href="/blog">Blog</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         </div>
         <div className="mi-container mi-footer-bottom"><span>© {new Date().getFullYear()} Find Again</span><span>Built for ideas worth finding again.</span></div>
       </footer>

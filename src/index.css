@@ -65,6 +65,44 @@
   }
 }
 
+.brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--color-text);
+}
+
+.brand-mark {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  color: #fff;
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 9px 20px -11px rgb(37 99 235 / 0.9);
+}
+
+.brand-mark svg { width: 1rem; height: 1rem; stroke-width: 2.2; }
+.brand-copy { display: grid; min-width: 0; gap: 0.1rem; }
+.brand-name { color: inherit; font-size: 1rem; font-weight: 750; letter-spacing: -0.025em; line-height: 1.1; }
+.brand-subtitle { color: var(--color-text-muted); font-size: 0.625rem; font-weight: 550; line-height: 1.1; }
+
+.brand-lockup--large .brand-mark { width: 2.5rem; height: 2.5rem; border-radius: 0.9rem; }
+.brand-lockup--large .brand-mark svg { width: 1.25rem; height: 1.25rem; }
+.brand-lockup--large .brand-name { font-size: 1.25rem; }
+.brand-lockup--small { gap: 0.5rem; }
+.brand-lockup--small .brand-mark { width: 1.75rem; height: 1.75rem; border-radius: 0.55rem; }
+.brand-lockup--small .brand-mark svg { width: 0.875rem; height: 0.875rem; }
+.brand-lockup--small .brand-name { font-size: 0.875rem; }
+
+@media (max-width: 420px) {
+  .public-shell-brand .brand-name { display: none; }
+}
+
 /* Semantic component tokens for saved content and AI/account surfaces. */
 .theme-content-primary { color: var(--color-content); }
 .theme-ai-surface-soft {

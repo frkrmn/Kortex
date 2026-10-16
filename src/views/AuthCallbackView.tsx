@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Layers, Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { getSupabase } from '../lib/supabase/client';
 import { useAuth } from '../lib/auth/auth-context';
 import { sanitizeRedirectPath } from '../lib/auth/redirect';
+import { BrandMark } from '../components/BrandMark';
 
 export const AuthCallbackView: React.FC = () => {
   const { navigate, searchParams } = useRouter();
@@ -79,9 +80,7 @@ export const AuthCallbackView: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#171717] flex flex-col justify-center items-center py-12 px-4">
       <div className="w-full max-w-sm bg-[#FFFFFF] p-8 border border-[#E8E8E5] rounded-3xl shadow-xs text-center space-y-4">
-        <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs mx-auto mb-2">
-          <Layers className="w-5 h-5" />
-        </div>
+        <div className="mx-auto mb-2 flex justify-center"><BrandMark compact className="brand-lockup--large" /></div>
 
         {errorMsg ? (
           <div className="space-y-3">

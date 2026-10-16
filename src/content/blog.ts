@@ -45,7 +45,7 @@ export const blogArticles: BlogArticle[] = [
       { type: 'callout', title: 'A simple rule', text: 'Use one broad category and a small number of topics that would help your future self find the post.' },
       { type: 'heading', level: 2, text: 'Keep the original source visible' },
       { type: 'paragraph', parts: ['Your notes and labels should make the bookmark easier to use, not replace the source. Keep the post text, author, publication date, and canonical link together so you can read the original context when it matters.'] },
-      { type: 'paragraph', parts: ['Find Again keeps the saved item available in its Reader and preserves a link back to X. You can ', link('explore the public demo', '/signup'), ' to see the reading flow before connecting an account.'] },
+      { type: 'paragraph', parts: ['Find Again keeps the saved item available in its Reader and preserves a link back to X. You can ', link('explore the Interactive Demo', '/demo'), ' to see the reading flow before connecting an account.'] },
       { type: 'heading', level: 2, text: 'Review the system when you need something' },
       { type: 'paragraph', parts: ['A good bookmark system is tested by retrieval. Search for a topic you remember, filter by a broad category, and open the saved item in context. If the result is noisy, refine the topic vocabulary you use next time rather than building a deeper folder tree.'] },
       { type: 'heading', level: 2, text: 'The goal is useful rediscovery' },

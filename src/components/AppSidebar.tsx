@@ -7,11 +7,11 @@ import {
   Search,
   PanelLeftClose,
   PanelLeft,
-  Layers,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useDemoStore } from '../lib/store/demo-store';
 import { useAuth } from '../lib/auth/auth-context';
+import { BrandMark } from './BrandMark';
 
 interface AppSidebarProps {
   onOpenSearch: () => void;
@@ -49,19 +49,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ onOpenSearch }) => {
           className="flex items-center gap-2.5 group cursor-pointer text-left"
           title="Find Again"
         >
-          <div className="w-7 h-7 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs shadow-xs shrink-0 group-hover:bg-[#2A2A2A] transition-colors">
-            <Layers className="w-4 h-4" />
-          </div>
-          {!sidebarCollapsed && (
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm tracking-tight text-[#171717] leading-none">
-                Find Again
-              </span>
-              <span className="text-[10px] text-[#8A8A85] tracking-tight font-medium mt-0.5">
-                Personal Library
-              </span>
-            </div>
-          )}
+          <BrandMark compact={sidebarCollapsed} className="brand-lockup--small" subtitle={sidebarCollapsed ? undefined : 'Personal Library'} />
         </button>
 
         <button

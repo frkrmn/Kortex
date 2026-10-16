@@ -10,9 +10,9 @@ import {
   RefreshCw,
   Search,
   CheckCircle2,
-  Layers,
 } from 'lucide-react';
 import { UserProfile, ConnectedAccount } from '../types';
+import { BrandMark } from './BrandMark';
 
 export type NavTab = 'home' | 'bookmarks' | 'collections' | 'insights' | 'ask-ai' | 'digests' | 'settings';
 
@@ -54,17 +54,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       >
         {/* Brand Header */}
         <div className="flex items-center justify-between px-2 mb-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs tracking-wider shadow-xs">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-semibold text-[15px] tracking-tight text-[#171717]">Find Again</span>
-              <span className="text-[10px] uppercase tracking-wider text-[#8A8A85] font-medium ml-1.5 px-1 py-0.5 rounded bg-[#EDEDE9]">
-                Intelligence
-              </span>
-            </div>
-          </div>
+          <BrandMark className="brand-lockup--small" subtitle="Intelligence" />
         </div>
 
         {/* Global Search Button (CMD+K) */}

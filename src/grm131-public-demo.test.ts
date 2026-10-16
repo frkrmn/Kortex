@@ -50,19 +50,21 @@ test('landing sends the interactive demo CTA to the public demo route', () => {
   const app = read('./App.tsx');
   const landing = read('./views/LandingPage.tsx');
   assert.match(app, /onExploreDemo=\{\(\) => navigate\('\/demo'\)\}/);
-  assert.match(landing, /Watch Demo/);
-  assert.match(landing, /Explore Demo/);
+  assert.match(landing, />Interactive Demo</);
+  assert.match(landing, /Explore Interactive Demo/);
   assert.match(landing, /onClick=\{onExploreDemo\}/);
 });
 
 test('public demo uses fixtures and has no production or provider API dependency', () => {
   const demo = read('./views/PublicDemoView.tsx');
   assert.match(demo, /demoBookmarks/);
-  assert.match(demo, /Interactive Demo · Demo data/);
-  assert.match(demo, /Start using Find Again/);
+  assert.match(demo, /Interactive Demo/);
+  assert.match(demo, /Start with your own bookmarks/);
+  assert.match(demo, /demoCollections/);
+  assert.match(demo, /Download sample JSON/);
   assert.doesNotMatch(demo, /from ['"]\.\.\/lib\/api['"]/);
   assert.doesNotMatch(demo, /supabase/i);
-  assert.doesNotMatch(demo, /syncX|Gemini|checkout/i);
+  assert.doesNotMatch(demo, /syncX|Gemini|checkout|fetch\(/i);
 });
 
 test('authenticated desktop and mobile navigation omit Marketing Site', () => {

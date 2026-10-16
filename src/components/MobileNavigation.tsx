@@ -4,13 +4,13 @@ import {
   Bookmark as BookmarkIcon,
   Search,
   Menu,
-  Layers,
   FolderKanban,
   Settings,
   X,
 } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
+import { BrandMark } from './BrandMark';
 
 interface MobileNavigationProps {
   onOpenSearch: () => void;
@@ -38,10 +38,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenSearch
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2 cursor-pointer"
         >
-          <div className="w-7 h-7 rounded-lg bg-[#171717] text-[#FAFAF8] flex items-center justify-center font-bold text-xs shadow-xs">
-            <Layers className="w-4 h-4" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight text-[#171717]">Find Again</span>
+          <BrandMark className="brand-lockup--small" />
         </button>
 
         <div className="flex items-center gap-2">

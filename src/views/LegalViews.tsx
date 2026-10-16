@@ -1,6 +1,7 @@
 import React from 'react';
-import { Layers, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter } from '../lib/router';
+import { BrandMark } from '../components/BrandMark';
 
 export const TermsView: React.FC = () => {
   const { navigate } = useRouter();
@@ -10,10 +11,7 @@ export const TermsView: React.FC = () => {
       <div className="mx-auto max-w-3xl rounded-3xl border border-[#E8E8E5] bg-[#FFFFFF] p-6 shadow-xs sm:p-10 lg:p-12">
         <div className="flex items-center justify-between pb-4 border-b border-[#F0F0EC]">
           <button type="button" aria-label="Back to Find Again home" className="flex items-center gap-2.5" onClick={() => navigate('/')}>
-            <div className="w-8 h-8 rounded-xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-base tracking-tight">Find Again</span>
+            <BrandMark />
           </button>
           <button
             type="button"
@@ -63,10 +61,7 @@ export const PrivacyView: React.FC = () => {
       <div className="mx-auto max-w-3xl rounded-3xl border border-[#E8E8E5] bg-[#FFFFFF] p-6 shadow-xs sm:p-10 lg:p-12">
         <div className="flex items-center justify-between pb-4 border-b border-[#F0F0EC]">
           <button type="button" aria-label="Back to Find Again home" className="flex items-center gap-2.5" onClick={() => navigate('/')}>
-            <div className="w-8 h-8 rounded-xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-base tracking-tight">Find Again</span>
+            <BrandMark />
           </button>
           <button
             type="button"

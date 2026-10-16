@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Layers, ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../lib/auth/auth-context';
+import { BrandMark } from '../components/BrandMark';
 
 export const ResetPasswordView: React.FC = () => {
   const { navigate } = useRouter();
@@ -52,10 +53,7 @@ export const ResetPasswordView: React.FC = () => {
           onClick={() => navigate('/')}
           className="flex items-center justify-center gap-2.5 cursor-pointer mb-8"
         >
-          <div className="w-10 h-10 rounded-2xl bg-[#171717] text-[#FAFAF8] flex items-center justify-center shadow-xs">
-            <Layers className="w-5 h-5" />
-          </div>
-          <span className="font-bold text-xl tracking-tight text-[#171717]">Find Again</span>
+          <BrandMark className="brand-lockup--large" />
         </div>
 
         {/* Card */}

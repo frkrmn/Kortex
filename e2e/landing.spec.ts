@@ -43,7 +43,7 @@ test('landing presents truthful product content and working public CTAs', async 
   await expect(page.getByText('Live Index')).toHaveCount(0);
   await expect(page.getByText(/Semantic Search/i)).toHaveCount(0);
   await expect(page.locator('h1')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Watch Demo' }).click();
+  await page.getByRole('button', { name: 'Interactive Demo', exact: true }).click();
   await expect(page).toHaveURL(/\/demo$/);
   await expect(page.locator('#public-interactive-demo')).toBeVisible();
 });

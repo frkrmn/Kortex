@@ -15,13 +15,13 @@
   --mi-header: rgba(255, 255, 255, 0.88);
   --mi-shadow: 0 20px 50px -28px rgba(15, 23, 42, 0.28);
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: clip;
   background: var(--mi-bg);
   color: var(--mi-text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-html:has(#landing-page) { scroll-behavior: smooth; }
+html:has(#landing-page) { scroll-behavior: smooth; scroll-padding-top: 88px; }
 
 :root[data-theme='dark'] .landing-mi {
   --mi-bg: #0d1118;
@@ -48,6 +48,7 @@ html:has(#landing-page) { scroll-behavior: smooth; }
 .landing-mi p, .landing-mi h1, .landing-mi h2, .landing-mi h3 { margin: 0; }
 .landing-mi button:focus-visible, .landing-mi a:focus-visible { outline: 3px solid var(--mi-soft-blue); outline-offset: 3px; }
 .landing-mi section[id] { scroll-margin-top: 84px; }
+#pricing { scroll-margin-top: 88px; }
 .mi-container { width: min(1280px, calc(100% - 64px)); margin-inline: auto; }
 
 .mi-header { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid color-mix(in srgb, var(--mi-border) 76%, transparent); background: var(--mi-header); backdrop-filter: blur(16px); }
@@ -283,7 +284,8 @@ html:has(#landing-page) { scroll-behavior: smooth; }
 .mi-control-stat small { color: var(--mi-muted); font-size: 11px; line-height: 1.45; }
 .mi-control-stat > span { padding: 5px 8px; border-radius: 999px; background: var(--mi-pale-blue); color: var(--mi-blue); font-size: 9px; font-weight: 750; }
 
-.mi-pricing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 880px; margin: 54px auto 0; gap: 18px; }
+.mi-pricing-stack { max-width: 880px; margin: 54px auto 0; }
+.mi-pricing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .mi-price-card { display: flex; min-height: 470px; flex-direction: column; padding: 30px; border: 1px solid var(--mi-border); border-radius: 20px; background: var(--mi-surface); color: var(--mi-text); box-shadow: 0 16px 40px -36px rgba(15,23,42,.65); }
 .mi-price-card--pro { position: relative; border: 2px solid var(--mi-blue); box-shadow: 0 24px 55px -30px color-mix(in srgb, var(--mi-blue) 45%, transparent); }
 .mi-price-badge { position: absolute; top: 0; right: 24px; padding: 7px 11px; border-radius: 0 0 9px 9px; background: var(--mi-blue); color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
@@ -298,7 +300,20 @@ html:has(#landing-page) { scroll-behavior: smooth; }
 .mi-price-card li { display: flex; align-items: flex-start; gap: 9px; color: var(--mi-muted); font-size: 13px; line-height: 1.5; }
 .mi-price-card li svg { flex: 0 0 auto; margin-top: 1px; color: var(--mi-blue); }
 .mi-price-card > .mi-button { width: 100%; margin-top: auto; }
-.mi-pricing-note { max-width: 720px; margin: 26px auto 0; color: var(--mi-faint); font-size: 12px; line-height: 1.6; text-align: center; }
+.mi-pricing-note { display: flex; max-width: 760px; align-items: flex-start; justify-content: center; gap: 9px; margin: 24px auto 0; padding: 13px 16px; border: 1px solid var(--mi-border); border-radius: 12px; background: color-mix(in srgb, var(--mi-surface) 72%, transparent); color: var(--mi-faint); font-size: 12px; line-height: 1.6; text-align: left; }
+.mi-pricing-note > span { display: inline-grid; width: 18px; height: 18px; flex: 0 0 auto; place-items: center; margin-top: 1px; border-radius: 50%; background: var(--mi-pale-blue); color: var(--mi-blue); font-size: 10px; font-weight: 800; }
+
+.mi-social-proof { background: linear-gradient(180deg, var(--mi-bg), color-mix(in srgb, var(--mi-pale-blue) 55%, var(--mi-bg))); }
+.mi-preview-disclosure { color: var(--mi-muted) !important; font-size: 14px !important; }
+.mi-testimonial-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 48px; }
+.mi-testimonial-grid article { display: flex; min-height: 260px; flex-direction: column; padding: 28px; border: 1px solid var(--mi-border); border-radius: 20px; background: var(--mi-surface); box-shadow: var(--mi-shadow); }
+.mi-testimonial-grid article > svg { color: var(--mi-blue); }
+.mi-testimonial-grid article > p { margin-top: 34px; color: var(--mi-text); font-size: 17px; line-height: 1.65; }
+.mi-testimonial-grid footer { display: flex; align-items: center; gap: 11px; margin-top: auto; padding-top: 28px; }
+.mi-testimonial-grid footer > span, .mi-testimonial-grid footer > img { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: var(--mi-pale-blue); color: var(--mi-blue); object-fit: cover; font-weight: 800; }
+.mi-testimonial-grid footer div { display: grid; gap: 2px; }
+.mi-testimonial-grid footer strong { color: var(--mi-text); font-size: 13px; }
+.mi-testimonial-grid footer small { color: var(--mi-faint); font-size: 11px; }
 
 .mi-faq-layout { display: grid; grid-template-columns: .7fr 1.3fr; align-items: start; gap: 90px; }
 .mi-faq-layout .mi-section-heading { position: sticky; top: 116px; }
@@ -380,6 +395,7 @@ html:has(#landing-page) { scroll-behavior: smooth; }
   .mi-flow-card, .mi-flow-card--result { min-height: 0; }
   .mi-value-grid { grid-template-columns: 1fr; }
   .mi-control-grid, .mi-faq-layout { grid-template-columns: 1fr; gap: 48px; }
+  .mi-testimonial-grid { grid-template-columns: 1fr; }
   .mi-faq-layout .mi-section-heading { position: static; }
   .mi-final-cta { padding: 60px 30px; }
 }
@@ -427,6 +443,7 @@ html:has(#landing-page) { scroll-behavior: smooth; }
   .mi-control-stat { grid-template-columns: auto 1fr; }
   .mi-control-stat > span { grid-column: 2; width: fit-content; }
   .mi-pricing-grid { grid-template-columns: 1fr; }
+  .mi-pricing-note { justify-content: flex-start; }
   .mi-price-card { min-height: 450px; padding: 25px; }
   .mi-price-head { align-items: flex-start; }
   .mi-final-wrap { padding-bottom: 76px; }

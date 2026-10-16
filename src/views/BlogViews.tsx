@@ -1,6 +1,7 @@
 import React from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Clock3, Layers } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Clock3 } from 'lucide-react';
 import { useRouter } from '../lib/router';
+import { BrandMark } from '../components/BrandMark';
 import { blogArticles, getBlogArticle, getBlogReadingTime, type BlogArticle, type BlogBlock, type BlogInlinePart } from '../content/blog';
 import './BlogViews.css';
 
@@ -21,11 +22,11 @@ function BlogShell({ children }: { children: React.ReactNode }) {
   const { navigate } = useRouter();
   return <div className="blog-mi">
     <header className="blog-header"><div className="blog-container blog-nav">
-      <button type="button" onClick={() => navigate('/')} aria-label="Back to Find Again home" className="blog-brand"><span><Layers size={18} /></span>Find Again</button>
+      <button type="button" onClick={() => navigate('/')} aria-label="Back to Find Again home" className="blog-brand-button"><BrandMark /></button>
       <nav aria-label="Blog navigation"><a href="/">Product</a><a href="/blog" aria-current="page">Blog</a><a href="/signup" className="blog-button blog-button--primary">Get started <ArrowRight size={15} /></a></nav>
     </div></header>
     {children}
-    <footer className="blog-footer"><div className="blog-container"><div><span className="blog-brand"><span><Layers size={18} /></span>Find Again</span><p>Ideas for a more useful bookmark library.</p></div><nav aria-label="Footer navigation"><a href="/">Product</a><a href="/blog">Blog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav></div></footer>
+    <footer className="blog-footer"><div className="blog-container"><div><BrandMark /><p>Ideas for a more useful bookmark library.</p></div><nav aria-label="Footer navigation"><a href="/">Product</a><a href="/demo">Interactive Demo</a><a href="/blog">Blog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav></div></footer>
   </div>;
 }
 

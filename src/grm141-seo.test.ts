@@ -37,11 +37,12 @@ test('indexable acquisition pages have unique complete metadata', () => {
   }
 });
 
-test('public pages share the Find Again social image while account routes do not', () => {
+test('public pages use suitable Find Again social images while account routes do not', () => {
   const publicRoutes: RouteType[] = ['landing', 'pricing', 'faq', 'how-it-works', 'demo', 'blog', 'blog-article', 'terms', 'privacy'];
   for (const route of publicRoutes) {
     const seo = getRouteSeo(route, route === 'blog-article' ? { slug: blogArticles[0].slug } : {});
-    assert.equal(getRouteSocialImage(seo), `${SITE_URL}${SOCIAL_IMAGE_PATH}`, `${route} social preview`);
+    const expected = route === 'blog-article' ? `${SITE_URL}${blogArticles[0].coverImage}` : `${SITE_URL}${SOCIAL_IMAGE_PATH}`;
+    assert.equal(getRouteSocialImage(seo), expected, `${route} social preview`);
   }
   for (const route of ['login', 'signup', 'auth-callback', 'settings', 'dashboard'] as RouteType[]) {
     assert.equal(getRouteSocialImage(getRouteSeo(route, {})), undefined, `${route} must not expose public social metadata`);

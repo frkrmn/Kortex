@@ -11,6 +11,8 @@ export type BlogArticle = {
   title: string;
   seoTitle: string;
   description: string;
+  coverImage: string;
+  coverAlt: string;
   author: string;
   publishedAt: string;
   updatedAt?: string;
@@ -29,7 +31,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'How to organize your X bookmarks so they stay useful',
     seoTitle: 'How to Organize X Bookmarks So They Stay Useful | Find Again',
     description: 'A practical workflow for turning a growing collection of saved X posts into something you can revisit, search, and use.',
-    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '6 min read', category: 'Bookmark workflows',
+    coverImage: '/blog/how-to-organize-x-bookmarks.jpg',
+    coverAlt: 'Saved content cards flowing into an organized blue library',
+    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '2 min read', category: 'Bookmark workflows',
     relatedSlugs: ['twitter-x-bookmark-folders', 'search-and-rediscover-x-bookmarks', 'ai-categorize-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['Saving a post is easy. Finding it again when you need the idea is the harder part. A useful bookmark system gives saved posts enough context to be searchable without turning every saved item into a manual filing project.'] },
@@ -53,7 +57,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'How to search and rediscover saved X posts',
     seoTitle: 'How to Search and Rediscover Saved X Posts | Find Again',
     description: 'A retrieval-first guide to finding the right saved post without scrolling through your entire bookmark history.',
-    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '5 min read', category: 'Rediscovery',
+    coverImage: '/blog/search-and-rediscover-x-bookmarks.jpg',
+    coverAlt: 'A focused search lens revealing one saved card in a bookmark library',
+    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '2 min read', category: 'Rediscovery',
     relatedSlugs: ['how-to-organize-x-bookmarks', 'build-a-read-later-workflow-from-x-bookmarks', 'ai-categorize-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['A bookmark library becomes valuable when it answers a future question quickly. Search is the bridge between “I remember saving something about this” and the original post.'] },
@@ -74,7 +80,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'How AI can help categorize X bookmarks without replacing your judgment',
     seoTitle: 'How AI Can Categorize X Bookmarks Without Replacing Your Judgment | Find Again',
     description: 'What AI enrichment is good at in a bookmark library, where it can fail, and how to keep the original source in control.',
-    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '6 min read', category: 'AI bookmark organization',
+    coverImage: '/blog/ai-categorize-x-bookmarks.jpg',
+    coverAlt: 'Saved content cards passing through an AI prism into organized topic groups',
+    author: 'Find Again Editorial', publishedAt: '2026-09-30', readingTime: '2 min read', category: 'AI bookmark organization',
     relatedSlugs: ['how-to-organize-x-bookmarks', 'search-and-rediscover-x-bookmarks', 'review-ai-summaries-of-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['Manual organization does not scale well when saving is effortless. AI enrichment can provide a useful first pass by summarizing a post, suggesting one broad category, and extracting a few topics or concepts.'] },
@@ -96,7 +104,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'X bookmark folders: a practical system beyond one folder per idea',
     seoTitle: 'X Bookmark Folders: A Practical Organization System | Find Again',
     description: 'How to use X bookmark folders as a starting point, then add searchable context without building a filing system you will abandon.',
-    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '7 min read', category: 'Bookmark workflows',
+    coverImage: '/blog/twitter-x-bookmark-folders.jpg',
+    coverAlt: 'Layered blue folders connected to flexible topic-based content cards',
+    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '4 min read', category: 'Bookmark workflows',
     relatedSlugs: ['how-to-organize-x-bookmarks', 'search-and-rediscover-x-bookmarks', 'export-preserve-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['X bookmark folders are useful for a quick first sort, but a folder name rarely captures every reason a post matters. A product thread might be useful for onboarding, pricing, and writing. The durable system is not the deepest folder tree; it is a small amount of context that helps you retrieve the post later.'] },
@@ -130,7 +140,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'How to build a read-later workflow from X bookmarks',
     seoTitle: 'Build a Read-Later Workflow from X Bookmarks | Find Again',
     description: 'A simple capture, review, and retrieval loop for turning saved X posts into a read-later queue you can actually finish.',
-    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '7 min read', category: 'Saved-post workflows',
+    coverImage: '/blog/build-a-read-later-workflow-from-x-bookmarks.jpg',
+    coverAlt: 'Saved cards moving through a calm queue into a focused reading view',
+    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '4 min read', category: 'Saved-post workflows',
     relatedSlugs: ['search-and-rediscover-x-bookmarks', 'twitter-x-bookmark-folders', 'export-preserve-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['“Read it later” fails when later has no shape. A useful X bookmark workflow separates capture from review, gives each saved post a next action, and leaves a trail that helps you find the idea after the original feed has moved on.'] },
@@ -165,7 +177,9 @@ export const blogArticles: BlogArticle[] = [
     title: 'How to export and preserve the useful context around X bookmarks',
     seoTitle: 'How to Export and Preserve X Bookmarks | Find Again',
     description: 'What an export can preserve, what it cannot guarantee, and how to make a usable backup of your organized X bookmark library.',
-    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '7 min read', category: 'Bookmark maintenance',
+    coverImage: '/blog/export-preserve-x-bookmarks.jpg',
+    coverAlt: 'A bookmark library moving into a durable archive and portable export package',
+    author: 'Find Again Editorial', publishedAt: '2026-10-07', readingTime: '4 min read', category: 'Bookmark maintenance',
     relatedSlugs: ['build-a-read-later-workflow-from-x-bookmarks', 'how-to-organize-x-bookmarks', 'ai-categorize-x-bookmarks'],
     blocks: [
       { type: 'paragraph', parts: ['Export is part of a trustworthy bookmark workflow, but “preserve my bookmarks” can mean several different things. You may want a list of source links, a copy of the text available to the app, your categories and notes, or a durable archive of media. These are different outcomes, and a good export explains the boundary.'] },
@@ -195,6 +209,17 @@ export const blogArticles: BlogArticle[] = [
     ],
   },
 ];
+
+export function getBlogReadingTime(article: Pick<BlogArticle, 'blocks'>): string {
+  const text = article.blocks.flatMap((block) => {
+    if (block.type === 'paragraph') return block.parts.map((part) => typeof part === 'string' ? part : part.label);
+    if (block.type === 'heading') return [block.text];
+    if (block.type === 'list') return block.items;
+    return [block.title, block.text];
+  }).join(' ');
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+}
 
 export function getBlogArticle(slug: string): BlogArticle | undefined {
   return blogArticles.find((article) => article.slug === slug);

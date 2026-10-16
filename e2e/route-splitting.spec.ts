@@ -14,7 +14,7 @@ test('public routes defer authenticated application modules', async ({ page }) =
   expect(landingModules.some(path => path.includes('AuthenticatedRoutes') || path.includes('BookmarkLibraryView'))).toBe(false);
 
   await page.goto('/blog');
-  await expect(page.getByRole('heading', { name: /Make saved ideas easier to return to/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Ideas worth saving/i })).toBeVisible();
   const blogModules = await loadedModulePaths(page);
   expect(blogModules.some(path => path.includes('BlogViews'))).toBe(true);
   expect(blogModules.some(path => path.includes('AuthenticatedRoutes') || path.includes('BookmarkLibraryView'))).toBe(false);

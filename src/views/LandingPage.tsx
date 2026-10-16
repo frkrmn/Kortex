@@ -36,12 +36,10 @@ const featureCards = [
   { icon: Download, title: 'Your data, always', body: 'Export your available account data as structured JSON and stay in control.' },
 ];
 
-const audiences = [
-  ['Individuals', 'Build a calmer, searchable home for ideas worth keeping.'],
-  ['Researchers', 'Return to source material, summaries, and topics without losing context.'],
-  ['Creators', 'Collect references and organize sparks before they disappear in the feed.'],
-  ['Product teams', 'Keep useful market, product, and technical reading in focused collections.'],
-  ['Lifelong learners', 'Turn everyday saving into a library you can actually revisit.'],
+const productValues = [
+  { icon: BookOpen, title: 'Save what matters.', body: 'Capture useful X bookmarks without interrupting discovery, while keeping the original source and context close.' },
+  { icon: BrainCircuit, title: 'Understand it faster.', body: 'Use summaries, categories, and topics to make long or technical posts easier to revisit after enrichment completes.' },
+  { icon: Search, title: 'Find it when you need it.', body: 'Search saved text and available enrichment metadata, then narrow the library with categories, topics, and filters.' },
 ];
 
 const Logo: React.FC = () => (
@@ -258,11 +256,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         <section id="how-it-works" className="mi-section mi-insight-section">
-          <div className="mi-container">
-            <div className="mi-section-heading">
+          <div className="mi-container mi-insight-layout">
+            <div className="mi-section-heading mi-insight-copy">
               <p className="mi-eyebrow">FROM SCATTERED POSTS TO LASTING KNOWLEDGE</p>
               <h2>Turn what you save into insights.</h2>
               <p>Eligible bookmarks can move through queued AI enrichment in the background, while the original source remains easy to reach.</p>
+              <button type="button" className="mi-button mi-button--light mi-flow-cta" onClick={onExploreDemo}>See It in Action <ArrowRight size={17} /></button>
             </div>
             <div className="mi-flow" aria-label="X bookmark to organized knowledge">
               <article className="mi-flow-card mi-flow-card--source">
@@ -283,18 +282,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="mi-result-group"><small>KEY CONCEPTS</small><div><span>Context</span><span>Recall</span><span>Clarity</span></div></div>
               </article>
             </div>
-            <button type="button" className="mi-button mi-button--light mi-flow-cta" onClick={onExploreDemo}>See It in Action <ArrowRight size={17} /></button>
           </div>
         </section>
 
         <section className="mi-section mi-section--soft">
           <div className="mi-container">
             <div className="mi-section-heading mi-section-heading--center">
-              <p className="mi-eyebrow">BUILT FOR CURIOUS MINDS</p>
-              <h2>Keep the ideas that move your work forward.</h2>
+              <p className="mi-eyebrow">A CALMER KNOWLEDGE WORKFLOW</p>
+              <h2>A better way to work with ideas.</h2>
+              <p>From the moment you save a post to the moment you need it again, each step is designed to preserve useful context.</p>
             </div>
-            <div className="mi-audience-grid">
-              {audiences.map(([title, body], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{body}</p></article>)}
+            <div className="mi-value-grid">
+              {productValues.map(({ icon: Icon, title, body }, index) => <article key={title}><div><span>0{index + 1}</span><Icon size={21} /></div><h3>{title}</h3><p>{body}</p></article>)}
             </div>
           </div>
         </section>

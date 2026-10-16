@@ -54,6 +54,10 @@ export default defineConfig({
       name: 'landing',
       testMatch: /(^|\/)landing\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
+    }, {
+      name: 'blog',
+      testMatch: /(^|\/)blog\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
     }] : []),
     {
       name: 'setup',

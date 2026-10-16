@@ -12,11 +12,13 @@ export type SeoConfig = {
   canonicalPath?: string;
   robots: 'index,follow' | 'noindex,follow' | 'noindex,nofollow';
   ogType?: 'website' | 'article';
+  socialImagePath?: string;
+  socialImageAlt?: string;
   schemas?: Record<string, unknown>[];
 };
 
 export function getRouteSocialImage(config: SeoConfig): string | undefined {
-  return config.robots === 'noindex,nofollow' ? undefined : `${SITE_URL}${SOCIAL_IMAGE_PATH}`;
+  return config.robots === 'noindex,nofollow' ? undefined : `${SITE_URL}${config.socialImagePath || SOCIAL_IMAGE_PATH}`;
 }
 
 const webPage = (name: string, description: string, path: string) => ({ '@context': 'https://schema.org', '@type': 'WebPage', name, description, url: `${SITE_URL}${path}` });
@@ -38,7 +40,7 @@ export function getRouteSeo(route: RouteType, params: Record<string, string>): S
     const article = getBlogArticle(params.slug);
     if (!article) return { title: 'Article Not Found | Find Again', description: 'The requested Find Again article is not available.', robots: 'noindex,follow' };
     const schemas: Record<string, unknown>[] = [
-      { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title, description: article.description, author: { '@type': 'Organization', name: article.author }, datePublished: article.publishedAt, dateModified: article.updatedAt || article.publishedAt, mainEntityOfPage: `${SITE_URL}/blog/${article.slug}` },
+      { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title, description: article.description, image: `${SITE_URL}${article.coverImage}`, author: { '@type': 'Organization', name: article.author }, datePublished: article.publishedAt, dateModified: article.updatedAt || article.publishedAt, mainEntityOfPage: `${SITE_URL}/blog/${article.slug}` },
       { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Find Again', item: SITE_URL },
         { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
@@ -46,7 +48,7 @@ export function getRouteSeo(route: RouteType, params: Record<string, string>): S
       ] },
     ];
     if (article.faq?.length) schemas.push({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: article.faq.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) });
-    return { title: `${article.seoTitle || article.title} | Find Again`, description: article.description, canonicalPath: `/blog/${article.slug}`, robots: 'index,follow', ogType: 'article', schemas };
+    return { title: `${article.seoTitle || article.title} | Find Again`, description: article.description, canonicalPath: `/blog/${article.slug}`, robots: 'index,follow', ogType: 'article', socialImagePath: article.coverImage, socialImageAlt: article.coverAlt, schemas };
   }
   if (route === 'terms') return { title: 'Terms of Service | Find Again', description: 'Terms of Service for Find Again, an X bookmark organization and personal knowledge service.', canonicalPath: '/terms', robots: 'index,follow', schemas: [webPage('Find Again Terms of Service', 'Terms governing use of Find Again.', '/terms')] };
   if (route === 'privacy') return { title: 'Privacy Policy | Find Again', description: 'Privacy Policy for Find Again, covering account, X bookmark, AI enrichment, billing, and service data.', canonicalPath: '/privacy', robots: 'index,follow', schemas: [webPage('Find Again Privacy Policy', 'How Find Again handles account, bookmark, AI, billing, and service data.', '/privacy')] };
@@ -82,7 +84,7 @@ export function usePageSeo(config: SeoConfig) {
     ensureMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: config.description });
     if (socialImage) {
       ensureMeta('meta[property="og:image"]', { property: 'og:image', content: socialImage });
-      ensureMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: 'Find Again — Find what you saved. When you need it again.' });
+      ensureMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: config.socialImageAlt || 'Find Again — Find what you saved. When you need it again.' });
       ensureMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: socialImage });
     } else {
       document.querySelectorAll('meta[property="og:image"], meta[property="og:image:alt"], meta[name="twitter:image"]').forEach(node => node.remove());

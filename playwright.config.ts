@@ -58,11 +58,12 @@ export default defineConfig({
       name: 'blog',
       testMatch: /(^|\/)blog\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
-    }, {
+    }] : []),
+    {
       name: 'public-ui',
       testMatch: /(^|\/)public-ui\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
-    }] : []),
+    },
     {
       name: 'setup',
       testMatch: /(^|\/)auth\.setup\.ts$/,

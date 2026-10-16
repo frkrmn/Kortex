@@ -63,8 +63,55 @@ test('landing remains composed without horizontal overflow at required viewports
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    if (viewport.width === 1440 || viewport.width === 390) {
-      await page.screenshot({ path: testInfo.outputPath(`landing-${viewport.width}-light.png`), fullPage: true });
+    if (viewport.width === 1440 || viewport.width === 390) await page.screenshot({ path: testInfo.outputPath(`landing-${viewport.width}-light.png`), fullPage: true });
+  }
+});
+
+test('desktop composition gives the product and transformation story reference-scale prominence', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  const heroCopy = await page.locator('.mi-hero-copy').boundingBox();
+  const heroPreview = await page.getByTestId('hero-product-preview').boundingBox();
+  const readerPreview = await page.getByTestId('reader-product-preview').boundingBox();
+  const flowCards = page.locator('.mi-flow-card');
+  const sourceCard = await flowCards.nth(0).boundingBox();
+  const resultCard = await flowCards.nth(1).boundingBox();
+
+  expect(heroCopy).not.toBeNull();
+  expect(heroPreview).not.toBeNull();
+  expect(readerPreview).not.toBeNull();
+  expect(sourceCard).not.toBeNull();
+  expect(resultCard).not.toBeNull();
+  expect(heroPreview!.x).toBeGreaterThan(heroCopy!.x + heroCopy!.width);
+  expect(heroPreview!.width).toBeGreaterThanOrEqual(600);
+  expect(heroPreview!.x + heroPreview!.width).toBeLessThanOrEqual(1440);
+  expect(readerPreview!.width).toBeGreaterThanOrEqual(650);
+  expect(await flowCards.count()).toBe(2);
+  expect(resultCard!.x).toBeGreaterThan(sourceCard!.x + sourceCard!.width);
+});
+
+test('visual acceptance captures every required viewport in light and dark', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const viewports = [
+    { width: 1440, height: 1000 },
+    { width: 1280, height: 900 },
+    { width: 1024, height: 900 },
+    { width: 768, height: 900 },
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
+  ];
+
+  await page.goto('/');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => localStorage.setItem('find-again-theme', value), theme);
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(page.getByRole('heading', { level: 1, name: /Save, understand and find anything/i })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`landing-${viewport.width}-${theme}.png`), fullPage: true });
     }
   }
 });

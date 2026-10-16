@@ -48,8 +48,8 @@ const Logo: React.FC = () => (
   <span className="mi-logo-mark" aria-hidden="true"><Layers size={18} strokeWidth={2.2} /></span>
 );
 
-const ProductPreview: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <div className={`mi-product-frame${compact ? ' mi-product-frame--compact' : ''}`} data-testid="landing-product-preview">
+const ProductPreview: React.FC = () => (
+  <div className="mi-product-frame" data-testid="hero-product-preview">
     <div className="mi-window-bar">
       <div className="mi-window-dots" aria-hidden="true"><i /><i /><i /></div>
       <span>Find Again · Library</span>
@@ -97,6 +97,34 @@ const ProductPreview: React.FC<{ compact?: boolean }> = ({ compact = false }) =>
         </div>
         <div className="mi-preview-status"><span><i /> AI enrichment queued</span><small>Processing continues in the background</small></div>
       </div>
+    </div>
+  </div>
+);
+
+const ReaderShowcase: React.FC = () => (
+  <div className="mi-reader-frame" data-testid="reader-product-preview">
+    <div className="mi-window-bar">
+      <div className="mi-window-dots" aria-hidden="true"><i /><i /><i /></div>
+      <span>Find Again · Reader</span>
+      <span className="mi-sample-pill">Sample data</span>
+    </div>
+    <div className="mi-reader-shell">
+      <aside className="mi-reader-list" aria-label="Sample saved posts">
+        <div className="mi-reader-list-head"><Logo /><strong>Library</strong></div>
+        <div className="mi-reader-mini-search"><Search size={13} /> Search bookmarks</div>
+        <article className="is-active"><small>ARTIFICIAL INTELLIGENCE</small><strong>A practical framework for evaluating retrieval quality</strong><span>Research notes · 8 min</span></article>
+        <article><small>PRODUCT</small><strong>Why useful tools preserve the path back to context</strong><span>Product field notes · 4 min</span></article>
+        <article><small>RESEARCH</small><strong>Building a repeatable reading and recall system</strong><span>Saved source · 6 min</span></article>
+      </aside>
+      <article className="mi-reader-content">
+        <div className="mi-reader-topline"><span><BookOpen size={14} /> Reader</span><a href="/demo">Open original <ExternalLink size={13} /></a></div>
+        <div className="mi-reader-author"><span className="mi-avatar">R</span><div><strong>Research notes</strong><small>@sample_source · recently saved</small></div></div>
+        <h3>Evaluate retrieval against the questions people actually need answered.</h3>
+        <p>Start with representative questions, preserve the original source, and measure whether the most useful context is easy to recover when it matters.</p>
+        <blockquote>“The goal is not a larger archive. It is a clearer path back to the right idea.”</blockquote>
+        <div className="mi-reader-insight"><Sparkles size={17} /><div><small>AI SUMMARY</small><strong>Retrieval quality depends on real questions, source relevance, and visible context.</strong></div></div>
+        <div className="mi-reader-metadata"><span>Artificial Intelligence</span><span>Search</span><span>Evaluation</span></div>
+      </article>
     </div>
   </div>
 );
@@ -165,19 +193,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <section className="mi-hero">
           <div className="mi-hero-glow mi-hero-glow--one" aria-hidden="true" />
           <div className="mi-hero-glow mi-hero-glow--two" aria-hidden="true" />
-          <div className="mi-container mi-hero-copy mi-reveal">
-            <p className="mi-eyebrow mi-eyebrow--pill"><Sparkles size={14} /> YOUR X BOOKMARKS, MORE USEFUL WITH AI</p>
-            <h1>Save, understand and find anything you’ve seen <span>on X.</span></h1>
-            <p className="mi-hero-lede">Find Again turns your X bookmarks into a searchable, organized knowledge library with AI summaries, topics and collections.</p>
-            <div className="mi-hero-actions">
-              <button type="button" id="landing-hero-cta" className="mi-button mi-button--primary mi-button--large" onClick={onStartOnboarding}>Get Started Free <ArrowRight size={17} /></button>
-              <button type="button" className="mi-button mi-button--secondary mi-button--large" onClick={onExploreDemo}>Watch Demo</button>
+          <div className="mi-container mi-hero-layout">
+            <div className="mi-hero-copy mi-reveal">
+              <p className="mi-eyebrow mi-eyebrow--pill"><Sparkles size={14} /> YOUR X BOOKMARKS, MORE USEFUL WITH AI</p>
+              <h1>Save, understand and find anything you’ve seen <span>on X.</span></h1>
+              <p className="mi-hero-lede">Find Again turns your X bookmarks into a searchable, organized knowledge library with AI summaries, topics and collections.</p>
+              <div className="mi-hero-actions">
+                <button type="button" id="landing-hero-cta" className="mi-button mi-button--primary mi-button--large" onClick={onStartOnboarding}>Get Started Free <ArrowRight size={17} /></button>
+                <button type="button" className="mi-button mi-button--secondary mi-button--large" onClick={onExploreDemo}>Watch Demo</button>
+              </div>
+              <div className="mi-capability-strip" aria-label="Core capabilities">
+                {['Import your bookmarks', 'AI summaries', 'Smart organization', 'Find anything, fast'].map(item => <span key={item}><Check size={14} />{item}</span>)}
+              </div>
             </div>
-            <div className="mi-capability-strip" aria-label="Core capabilities">
-              {['Import your bookmarks', 'AI summaries', 'Smart organization', 'Find anything, fast'].map(item => <span key={item}><Check size={14} />{item}</span>)}
+            <div className="mi-hero-stage mi-reveal mi-reveal--delay">
+              <div className="mi-stage-orb mi-stage-orb--one" aria-hidden="true" />
+              <div className="mi-stage-orb mi-stage-orb--two" aria-hidden="true" />
+              <ProductPreview />
+              <div className="mi-stage-float mi-stage-float--top"><Sparkles size={15} /><span><strong>AI enrichment</strong><small>Summary ready</small></span><Check size={14} /></div>
+              <div className="mi-stage-float mi-stage-float--bottom"><Search size={15} /><span><strong>Found in seconds</strong><small>Across text, topics, and categories</small></span></div>
             </div>
           </div>
-          <div className="mi-container mi-hero-preview mi-reveal mi-reveal--delay"><ProductPreview /></div>
         </section>
 
         <section id="features" className="mi-section mi-section--soft">
@@ -211,7 +247,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div><Layers size={18} /><span><strong>Rich X content</strong><small>Stored text and available media stay connected to the source.</small></span></div>
                 <div><BookOpen size={18} /><span><strong>Built-in Reader</strong><small>Read with less feed noise and reopen the original post anytime.</small></span></div>
               </div>
-              <ProductPreview compact />
+              <ReaderShowcase />
               <div className="mi-showcase-points">
                 <div><Search size={18} /><span><strong>Search and filters</strong><small>Narrow by saved text, enrichment metadata, category, or topic.</small></span></div>
                 <div><FolderKanban size={18} /><span><strong>Collections</strong><small>Group useful bookmarks around the work that matters.</small></span></div>
@@ -221,7 +257,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        <section id="how-it-works" className="mi-section mi-section--navy">
+        <section id="how-it-works" className="mi-section mi-insight-section">
           <div className="mi-container">
             <div className="mi-section-heading">
               <p className="mi-eyebrow">FROM SCATTERED POSTS TO LASTING KNOWLEDGE</p>
@@ -229,27 +265,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <p>Eligible bookmarks can move through queued AI enrichment in the background, while the original source remains easy to reach.</p>
             </div>
             <div className="mi-flow" aria-label="X bookmark to organized knowledge">
-              <article className="mi-flow-card">
+              <article className="mi-flow-card mi-flow-card--source">
                 <div className="mi-flow-label"><span>01</span> X BOOKMARK</div>
-                <div className="mi-source-post"><span className="mi-avatar">X</span><div><strong>Saved source</strong><small>@sample_source</small></div></div>
-                <p>Three useful ways to make research notes easier to revisit, compare, and apply later.</p>
-                <a href="/demo">Original source <ExternalLink size={13} /></a>
+                <div className="mi-source-post"><span className="mi-avatar">R</span><div><strong>Research notes</strong><small>@sample_source · saved from X</small></div><ExternalLink size={16} /></div>
+                <p>Three useful ways to make research notes easier to revisit, compare, and apply later.<br /><br />Keep the source visible. Capture the useful idea. Build a structure that makes returning effortless.</p>
+                <div className="mi-source-media" aria-hidden="true"><span>Notes</span><strong>CONTEXT → CLARITY</strong><i /></div>
+                <div className="mi-source-footer"><span>Saved to Library</span><a href="/demo">View source <ExternalLink size={13} /></a></div>
               </article>
-              <ArrowRight className="mi-flow-arrow" aria-hidden="true" />
-              <article className="mi-flow-card mi-flow-card--ai">
-                <div className="mi-flow-label"><span>02</span> GEMINI AI ENRICHMENT</div>
-                <span className="mi-queue-pill"><i /> Queued, then processed</span>
-                <div className="mi-ai-orbit"><BrainCircuit size={30} /></div>
-                <p>Enrichment runs in the background and can add a concise summary and organization metadata.</p>
-              </article>
-              <ArrowRight className="mi-flow-arrow" aria-hidden="true" />
+              <div className="mi-flow-bridge" aria-hidden="true"><span><Sparkles size={20} /></span><ArrowRight /></div>
               <article className="mi-flow-card mi-flow-card--result">
-                <div className="mi-flow-label"><span>03</span> ORGANIZED KNOWLEDGE</div>
-                <small>AI SUMMARY</small>
-                <p className="mi-result-summary">A simple system for notes that are easier to retrieve, compare, and put into practice.</p>
-                <div className="mi-result-row"><strong>Category</strong><span>Research</span></div>
-                <div className="mi-result-row"><strong>Topics</strong><span>Note-taking · Retrieval</span></div>
-                <div className="mi-result-row"><strong>Key concepts</strong><span>Context · Recall</span></div>
+                <div className="mi-flow-label"><span>02</span> ORGANIZED KNOWLEDGE</div>
+                <span className="mi-queue-pill"><i /> Enriched after background processing</span>
+                <div className="mi-result-heading"><BrainCircuit size={20} /><div><small>AI-GENERATED SUMMARY</small><strong>A clearer system for ideas worth returning to.</strong></div></div>
+                <p className="mi-result-summary">Preserve original context, capture the central insight, and organize notes so they are easier to retrieve and use later.</p>
+                <div className="mi-result-group"><small>CATEGORY</small><span>Research</span></div>
+                <div className="mi-result-group"><small>TOPICS</small><div><span>Note-taking</span><span>Retrieval</span><span>Knowledge systems</span></div></div>
+                <div className="mi-result-group"><small>KEY CONCEPTS</small><div><span>Context</span><span>Recall</span><span>Clarity</span></div></div>
               </article>
             </div>
             <button type="button" className="mi-button mi-button--light mi-flow-cta" onClick={onExploreDemo}>See It in Action <ArrowRight size={17} /></button>
